@@ -15,7 +15,7 @@ import (
 	"trailmix/vault"
 )
 
-const usage = `Usage: tmx [--vault PATH] COMMAND [options] [note/query]
+const usage = `Usage: tmix [--vault PATH] COMMAND [options] [note/query]
 Commands:
   init    [--install-obsidian]    Create the vault; optionally install Obsidian
   search  [--limit N] [--json] QUERY
@@ -29,7 +29,7 @@ Flags must precede positional arguments. --vault also works after COMMAND.
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "tmx:", err)
+		fmt.Fprintln(os.Stderr, "tmix:", err)
 		os.Exit(1)
 	}
 }
@@ -39,7 +39,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	if err != nil {
 		return err
 	}
-	global := flag.NewFlagSet("tmx", flag.ContinueOnError)
+	global := flag.NewFlagSet("tmix", flag.ContinueOnError)
 	global.SetOutput(diagnostics)
 	root := global.String("vault", filepath.Join(home, ".trailmix"), "vault directory")
 	if err := global.Parse(args); err != nil {

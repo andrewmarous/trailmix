@@ -98,7 +98,7 @@ func (g Git) Remote(args []string) error {
 		return nil
 	}
 	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
-		_, err := fmt.Fprintln(g.Out, "Usage: tmx remote [-v | add NAME URL | remove NAME | rename OLD NEW | get-url NAME | set-url NAME URL]")
+		_, err := fmt.Fprintln(g.Out, "Usage: tmix remote [-v | add NAME URL | remove NAME | rename OLD NEW | get-url NAME | set-url NAME URL]")
 		return err
 	}
 	op := args[0]
@@ -111,7 +111,7 @@ func (g Git) Remote(args []string) error {
 		return fmt.Errorf("unsupported remote operation %q", op)
 	}
 	if len(args) != count {
-		return fmt.Errorf("usage: tmx remote %s NAME%s", op, map[bool]string{true: " VALUE", false: ""}[count == 3])
+		return fmt.Errorf("usage: tmix remote %s NAME%s", op, map[bool]string{true: " VALUE", false: ""}[count == 3])
 	}
 	name := args[1]
 	if err := validName(name); err != nil {
@@ -163,7 +163,7 @@ func (g Git) Backup(root, remote string) error {
 	}
 	url, ok := remotes[remote]
 	if !ok {
-		return fmt.Errorf("remote %q is not configured; use tmx remote add", remote)
+		return fmt.Errorf("remote %q is not configured; use tmix remote add", remote)
 	}
 	if err := validURL(url); err != nil {
 		return err

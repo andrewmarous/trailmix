@@ -1,6 +1,6 @@
 # Trailmix
 
-`tmx` is a small CLI for a shared Markdown knowledge base. Obsidian is optional. No database, daemon, or runtime dependency is necessary.
+`tmix` is a small CLI for a shared Markdown knowledge base. Obsidian is optional. No database, daemon, or runtime dependency is necessary.
 
 ## Build
 
@@ -10,7 +10,7 @@ Install Go 1.24 or newer. Then build the executable:
 make build
 ```
 
-The executable is `build/tmx`. For the `./tmx` examples below, run `ln -s build/tmx tmx` after the build.
+The executable is `build/tmix`. For the `./tmix` examples below, run `ln -s build/tmix tmix` after the build.
 
 To build and install the executable in `/usr/local/bin`, run:
 
@@ -18,7 +18,7 @@ To build and install the executable in `/usr/local/bin`, run:
 make install
 ```
 
-This directory is normally on `PATH` on macOS and Linux. After installation, use `tmx` instead of `./tmx` or `build/tmx`.
+This directory is normally on `PATH` on macOS and Linux. After installation, use `tmix` instead of `./tmix` or `build/tmix`.
 
 If directory permissions prevent installation, run `sudo make install`. For a different destination, use `make install BINDIR=/path/to/bin`.
 
@@ -29,7 +29,7 @@ If directory permissions prevent installation, run `sudo make install`. For a di
 Create the default vault:
 
 ```sh
-./tmx init
+./tmix init
 ```
 
 The vault path is `~/.trailmix`. Initialization creates these directories without replacing existing content:
@@ -50,7 +50,7 @@ These directories are conventions, not enforced note types. Initialization adds 
 On macOS, optionally install Obsidian through Homebrew:
 
 ```sh
-./tmx init --install-obsidian
+./tmix init --install-obsidian
 ```
 
 Initialization detects Obsidian in standard application locations or on `PATH`. Detection does not cover every custom installation location.
@@ -61,14 +61,14 @@ The vault remains usable if installation fails. To view the vault in Obsidian, o
 
 ```sh
 printf '# Verification\n\nTest the combined capability.\n' |
-  ./tmx write preferences/verification.md
+  ./tmix write preferences/verification.md
 
-./tmx search verification
-./tmx search --limit 5 --json VPN database
-./tmx read preferences/verification.md
+./tmix search verification
+./tmix search --limit 5 --json VPN database
+./tmix read preferences/verification.md
 
 printf '\n## Example\n\nConnect to the database through the VPN.\n' |
-  ./tmx append preferences/verification.md
+  ./tmix append preferences/verification.md
 ```
 
 `write` and `append` read UTF-8 content from stdin, with a 16 MiB limit. They preserve the input exactly.
@@ -80,8 +80,8 @@ Note paths are relative to the vault. The `.md` extension is optional. Hidden pa
 Use an alternate vault for experiments:
 
 ```sh
-./tmx --vault /tmp/trailmix-demo init
-./tmx read --vault /tmp/trailmix-demo inbox/example.md
+./tmix --vault /tmp/trailmix-demo init
+./tmix read --vault /tmp/trailmix-demo inbox/example.md
 ```
 
 Flags must precede positional arguments. `--vault` works before or after the command. Errors go to stderr with exit status 1.
@@ -105,13 +105,13 @@ CAUTION: Use a private repository. Backups include vault content and attachments
 Configure a remote globally, independently of the selected vault:
 
 ```sh
-build/tmx remote add origin git@github.com:YOUR-USER/YOUR-PRIVATE-REPO.git
-build/tmx remote
-build/tmx remote -v
-build/tmx remote get-url origin
-build/tmx remote set-url origin git@github.com:YOUR-USER/OTHER-REPO.git
-build/tmx remote rename origin archive
-build/tmx remote remove archive
+build/tmix remote add origin git@github.com:YOUR-USER/YOUR-PRIVATE-REPO.git
+build/tmix remote
+build/tmix remote -v
+build/tmix remote get-url origin
+build/tmix remote set-url origin git@github.com:YOUR-USER/OTHER-REPO.git
+build/tmix remote rename origin archive
+build/tmix remote remove archive
 ```
 
 Remote configuration uses `trailmix/remotes.gitconfig` under the operating system's user configuration directory. On macOS, this directory is `~/Library/Application Support`.
@@ -119,9 +119,9 @@ Remote configuration uses `trailmix/remotes.gitconfig` under the operating syste
 Configure `origin` again if you removed it. Then create and push a snapshot:
 
 ```sh
-build/tmx backup
-build/tmx backup archive
-build/tmx --vault /path/to/vault backup origin
+build/tmix backup
+build/tmix backup archive
+build/tmix --vault /path/to/vault backup origin
 ```
 
 Git must be installed. Backups use your existing Git identity and SSH or HTTPS credentials. No credentials are stored by Trailmix.

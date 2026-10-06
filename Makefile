@@ -5,14 +5,14 @@ BINDIR ?= $(PREFIX)/bin
 
 build:
 	mkdir -p build
-	go build -o build/tmx ./cmd/tmx
+	go build -o build/tmix ./cmd/tmx
 
 install: build
-	@mkdir -p "$(DESTDIR)$(BINDIR)" && install -m 755 build/tmx "$(DESTDIR)$(BINDIR)/tmx" || { \
+	@mkdir -p "$(DESTDIR)$(BINDIR)" && install -m 755 build/tmix "$(DESTDIR)$(BINDIR)/tmix" || { \
 		echo 'Installation failed. Check directory permissions; if needed, run: sudo make install' >&2; \
 		exit 1; \
 	}
-	@echo 'Installed tmx to $(DESTDIR)$(BINDIR)/tmx'
+	@echo 'Installed tmix to $(DESTDIR)$(BINDIR)/tmix'
 	@if [ -z "$(DESTDIR)" ]; then \
 		case ":$$PATH:" in \
 			*:"$(BINDIR)":*) ;; \
