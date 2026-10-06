@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"trailmix/backup"
 	"trailmix/vault"
 )
 
@@ -21,6 +22,8 @@ Commands:
   read    NOTE                   Print Markdown
   write   [--overwrite] NOTE      Create a note from stdin
   append  NOTE                   Append stdin exactly to an existing note
+  remote  [-v | add NAME URL | remove NAME | rename OLD NEW | get-url NAME | set-url NAME URL]
+  backup  [REMOTE]               Commit and push the vault (default: origin)
 Flags must precede positional arguments. --vault also works after COMMAND.
 `
 
@@ -53,7 +56,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	}
 	command := args[0]
 	switch command {
-	case "init", "search", "read", "write", "append":
+	case "init", "search", "read", "write", "append", "remote", "backup":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -71,14 +74,26 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		flags.IntVar(&limit, "limit", 10, "maximum results (1–100)")
 		flags.BoolVar(&jsonOutput, "json", false, "emit JSON")
 	}
-	if err := flags.Parse(args[1:]); err != nil {
+	parseArgs := args[1:]
+	if command == "remote" {
+		parseArgs = nil
+	}
+	if err := flags.Parse(parseArgs); err != nil {
 		if err == flag.ErrHelp {
 			return nil
 		}
 		return err
 	}
 	positional := flags.Args()
-	if command == "init" {
+	if command == "remote" {
+		// Preserve git remote's -v flag instead of parsing it as a CLI flag.
+		positional = args[1:]
+	}
+	if command == "remote" || command == "backup" {
+		if command == "backup" && len(positional) > 1 {
+			return fmt.Errorf("backup accepts at most one remote name")
+		}
+	} else if command == "init" {
 		if len(positional) != 0 {
 			return fmt.Errorf("init takes no positional arguments")
 		}
@@ -99,6 +114,20 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	switch command {
+	case "remote", "backup":
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			return err
+		}
+		g := backup.Git{Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Out: out, Err: diagnostics}
+		if command == "remote" {
+			return g.Remote(positional)
+		}
+		remote := "origin"
+		if len(positional) == 1 {
+			remote = positional[0]
+		}
+		return g.Backup(v.Root, remote)
 	case "init":
 		if err := v.Init(); err != nil {
 			return err

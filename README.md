@@ -7,14 +7,22 @@
 Install Go 1.24 or newer. Then build the executable:
 
 ```sh
-go build -o tmx ./cmd/tmx
+make build
 ```
 
-To install the executable in your Go binary directory, run:
+The executable is `build/tmx`. For the `./tmx` examples below, run `ln -s build/tmx tmx` after the build.
+
+To build and install the executable in `/usr/local/bin`, run:
 
 ```sh
-go install ./cmd/tmx
+make install
 ```
+
+This directory is normally on `PATH` on macOS and Linux. After installation, use `tmx` instead of `./tmx` or `build/tmx`.
+
+If directory permissions prevent installation, run `sudo make install`. For a different destination, use `make install BINDIR=/path/to/bin`.
+
+`PREFIX` defaults to `/usr/local`. `DESTDIR` supports staged installations for packaging.
 
 ## Start
 
@@ -89,6 +97,44 @@ Search returns at most 10 notes by default. `--limit` accepts 1–100. Snippets 
 For path-only matches, the line number is 0. No matches produce empty text or an empty JSON array.
 
 Search excludes hidden files, hidden directories, symlinks, and non-Markdown files. It scans the vault on each call without an index.
+
+## Git backups
+
+CAUTION: Use a private repository. Backups include vault content and attachments, including any secrets in those files.
+
+Configure a remote globally, independently of the selected vault:
+
+```sh
+build/tmx remote add origin git@github.com:YOUR-USER/YOUR-PRIVATE-REPO.git
+build/tmx remote
+build/tmx remote -v
+build/tmx remote get-url origin
+build/tmx remote set-url origin git@github.com:YOUR-USER/OTHER-REPO.git
+build/tmx remote rename origin archive
+build/tmx remote remove archive
+```
+
+Remote configuration uses `trailmix/remotes.gitconfig` under the operating system's user configuration directory. On macOS, this directory is `~/Library/Application Support`.
+
+Configure `origin` again if you removed it. Then create and push a snapshot:
+
+```sh
+build/tmx backup
+build/tmx backup archive
+build/tmx --vault /path/to/vault backup origin
+```
+
+Git must be installed. Backups use your existing Git identity and SSH or HTTPS credentials. No credentials are stored by Trailmix.
+
+Backup creates a Git repository inside the vault if necessary. It commits changes and deletions, then pushes the `main` branch.
+
+New snapshots exclude `.obsidian/` and temporary `.tmx-*` files. Git ignore rules also apply. Previously committed files remain in repository history.
+
+Backup requires the local `main` branch. It does not pull, merge, force-push, create a hosted repository, or configure authentication.
+
+If a push fails, the local commit remains available for another attempt. If the remote contains conflicting history, Git rejects the push.
+
+Use an empty remote repository for the first backup. Different vaults must use different remotes to avoid conflicting histories.
 
 ## Library
 
