@@ -65,6 +65,27 @@ The user selected this policy in issue 142.
 
 Use descriptive paths and ordinary Obsidian links.
 Keep related information together, or connect focused notes with links.
+
+### Rules for written links
+
+1. Prefer explicit vault-relative paths: `[[procedures/backoff]]`.
+2. Use exact, case-sensitive file names.
+3. Create the target before you add a link to it.
+4. Use a bare name such as `[[backoff]]` only when it identifies exactly one file across the vault.
+5. Do not use absolute paths, backslashes, colons, empty path components, or components that start with a dot.
+6. Run `tmix links NOTE` after changes to links.
+
+Paths with `/` resolve from the vault root, not from the source note's directory.
+The `.md` extension is optional for note targets. Attachments require their exact file names, including extensions.
+Aliases do not affect resolution. Local fragments such as `[[#Heading]]` refer to the source note.
+Heading and block fragments remain in the output, but Trailmix does not validate their existence.
+Resolution guarantees a file target, not a valid heading or block target.
+Hidden files, hidden directories, and symlinks cannot be targets.
+
+`tmix links NOTE` returns outgoing links and backlinks after a vault scan.
+Missing, ambiguous, or unsafe targets anywhere in the scan cause an error with no partial output.
+No resolution status or persistent index is necessary.
+Writes do not enforce these rules automatically. The link command checks them after the write.
 Directories are optional conventions, not scopes or access boundaries:
 
 - `concepts/`: Definitions and explanations
@@ -203,6 +224,27 @@ Search returns at most 10 notes by default. `--limit` accepts 1–100. Snippets 
 For path-only matches, the line number is 0. No matches produce empty text or an empty JSON array.
 
 Search excludes hidden files, hidden directories, symlinks, and non-Markdown files. It scans the vault on each call without an index.
+
+## Link parsing
+
+Obsidian is not required. Resolve outgoing wiki links and backlinks with:
+
+```sh
+tmix links procedures/retries.md
+tmix links --json procedures/retries.md
+```
+
+The parser recognizes `[[path]]`, `[[note|alias]]`, `[[note#heading]]`, `[[note#^block]]`, and `![[note]]` embeds.
+Local references such as `[[#heading]]` have an empty target.
+JSON contains `outgoing` and `backlinks` arrays. Each reference includes `source`, resolved `path`, original `target`, and `line`.
+Optional fields include `fragment`, `alias`, and `embed`.
+Text output includes the direction, source path, source line, and resolved target with its fragment.
+
+The parser preserves order and duplicates. It ignores fenced code, inline code, HTML comments, and escaped opening brackets.
+Links cannot span lines. Standard Markdown links are not wiki links and are not included.
+The operating guide defines resolution rules for written links. A broken link anywhere in the scan causes an error without partial output.
+Fragments are preserved but not validated. Each call scans the vault without a persistent index.
+Files can change during a scan. The results are not a consistent snapshot.
 
 ## Git backups
 

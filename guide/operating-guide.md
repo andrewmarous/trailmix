@@ -58,6 +58,27 @@ The user selected this policy in issue 142.
 
 Use descriptive paths and ordinary Obsidian links.
 Keep related information together, or connect focused notes with links.
+
+### Rules for written links
+
+1. Prefer explicit vault-relative paths: `[[procedures/backoff]]`.
+2. Use exact, case-sensitive file names.
+3. Create the target before you add a link to it.
+4. Use a bare name such as `[[backoff]]` only when it identifies exactly one file across the vault.
+5. Do not use absolute paths, backslashes, colons, empty path components, or components that start with a dot.
+6. Run `tmix links NOTE` after changes to links.
+
+Paths with `/` resolve from the vault root, not from the source note's directory.
+The `.md` extension is optional for note targets. Attachments require their exact file names, including extensions.
+Aliases do not affect resolution. Local fragments such as `[[#Heading]]` refer to the source note.
+Heading and block fragments remain in the output, but Trailmix does not validate their existence.
+Resolution guarantees a file target, not a valid heading or block target.
+Hidden files, hidden directories, and symlinks cannot be targets.
+
+`tmix links NOTE` returns outgoing links and backlinks after a vault scan.
+Missing, ambiguous, or unsafe targets anywhere in the scan cause an error with no partial output.
+No resolution status or persistent index is necessary.
+Writes do not enforce these rules automatically. The link command checks them after the write.
 Directories are optional conventions, not scopes or access boundaries:
 
 - `concepts/`: Definitions and explanations

@@ -23,6 +23,7 @@ Commands:
   instructions                  Print the operating guide
   init    [--install-obsidian]    Create the vault; optionally install Obsidian
   search  [--limit N] [--json] QUERY
+  links   [--json] NOTE          Resolve outgoing links and backlinks
   read    NOTE                   Print Markdown
   write   [--overwrite] NOTE      Create a note from stdin
   append  NOTE                   Append stdin exactly to an existing note
@@ -67,7 +68,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	switch command {
-	case "init", "search", "read", "write", "append", "remote", "backup":
+	case "init", "search", "links", "read", "write", "append", "remote", "backup":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -81,6 +82,8 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		flags.BoolVar(&install, "install-obsidian", false, "install Obsidian with Homebrew (macOS) or apt (Linux .deb)")
 	case "write":
 		flags.BoolVar(&overwrite, "overwrite", false, "replace an existing note")
+	case "links":
+		flags.BoolVar(&jsonOutput, "json", false, "emit JSON")
 	case "search":
 		flags.IntVar(&limit, "limit", 10, "maximum results (1–100)")
 		flags.BoolVar(&jsonOutput, "json", false, "emit JSON")
@@ -156,6 +159,29 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 			return fmt.Errorf("install Obsidian: %w (vault remains ready)", err)
 		}
 		fmt.Fprintln(out, "Obsidian installed. Open this folder as a vault.")
+	case "links":
+		links, err := v.Navigate(positional[0])
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			return json.NewEncoder(out).Encode(links)
+		}
+		for _, group := range []struct {
+			name string
+			refs []vault.Reference
+		}{{"outgoing", links.Outgoing}, {"backlink", links.Backlinks}} {
+			for _, ref := range group.refs {
+				target := ref.Path
+				if ref.Fragment != "" {
+					target += "#" + ref.Fragment
+				}
+				if _, err := fmt.Fprintf(out, "%s %s:%d: %s\n", group.name, ref.Source, ref.Line, target); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	case "read":
 		data, err := v.Read(positional[0])
 		if err != nil {
