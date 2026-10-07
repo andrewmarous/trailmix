@@ -12,11 +12,15 @@ import (
 	"strings"
 
 	"trailmix/backup"
+	"trailmix/guide"
 	"trailmix/vault"
 )
 
 const usage = `Usage: tmix [--vault PATH] COMMAND [options] [note/query]
+Run tmix instructions for when to search, how to search, what to preserve,
+and how to correct shared memory. Write only on explicit user request.
 Commands:
+  instructions                  Print the operating guide
   init    [--install-obsidian]    Create the vault; optionally install Obsidian
   search  [--limit N] [--json] QUERY
   read    NOTE                   Print Markdown
@@ -55,6 +59,13 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return nil
 	}
 	command := args[0]
+	if command == "instructions" {
+		if len(args) != 1 {
+			return fmt.Errorf("instructions takes no arguments")
+		}
+		_, err := io.WriteString(out, guide.Text)
+		return err
+	}
 	switch command {
 	case "init", "search", "read", "write", "append", "remote", "backup":
 	default:
@@ -67,7 +78,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	limit := 10
 	switch command {
 	case "init":
-		flags.BoolVar(&install, "install-obsidian", false, "install Obsidian with Homebrew (macOS)")
+		flags.BoolVar(&install, "install-obsidian", false, "install Obsidian with Homebrew (macOS) or apt (Linux .deb)")
 	case "write":
 		flags.BoolVar(&overwrite, "overwrite", false, "replace an existing note")
 	case "search":
@@ -141,18 +152,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 			fmt.Fprintln(out, "Obsidian not detected. The CLI is ready; install Obsidian separately or use init --install-obsidian.")
 			return nil
 		}
-		if runtime.GOOS != "darwin" {
-			return fmt.Errorf("automatic Obsidian installation supports macOS only; install manually")
-		}
-		brew, err := exec.LookPath("brew")
-		if err != nil {
-			return fmt.Errorf("Homebrew is required; install Obsidian manually from https://obsidian.md")
-		}
-		cmd := exec.Command(brew, "install", "--cask", "obsidian")
-		cmd.Stdin = in
-		cmd.Stdout = diagnostics
-		cmd.Stderr = diagnostics
-		if err := cmd.Run(); err != nil {
+		if err := installObsidian(runtime.GOOS, in, diagnostics); err != nil {
 			return fmt.Errorf("install Obsidian: %w (vault remains ready)", err)
 		}
 		fmt.Fprintln(out, "Obsidian installed. Open this folder as a vault.")

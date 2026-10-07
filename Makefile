@@ -1,11 +1,17 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
-.PHONY: build install test vet clean
+.PHONY: build install test vet clean docs docs-check
+
+docs:
+	go run ./internal/gendocs
+
+docs-check:
+	go run ./internal/gendocs --check
 
 build:
 	mkdir -p build
-	go build -o build/tmix ./cmd/tmx
+	go build -o build/tmix ./cmd/tmix
 
 install: build
 	@mkdir -p "$(DESTDIR)$(BINDIR)" && install -m 755 build/tmix "$(DESTDIR)$(BINDIR)/tmix" || { \
@@ -20,7 +26,7 @@ install: build
 		esac; \
 	fi
 
-test:
+test: docs-check
 	go test -race ./...
 
 vet:
