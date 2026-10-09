@@ -201,8 +201,8 @@ func (g Git) Backup(root, remote string) error {
 	if len(staged) > 0 {
 		return fmt.Errorf("excluded files have staged changes; commit or unstage them before backup")
 	}
-	// Snapshot the whole vault except local Obsidian UI state and temporary writes.
-	if _, err := g.command(root, "add", "-A", "--", ".", ":(exclude).obsidian", ":(exclude)**/.tmx-*"); err != nil {
+	// Snapshot the whole vault except local UI state, temporary writes, and locks.
+	if _, err := g.command(root, "add", "-A", "--", ".", ":(exclude).obsidian", ":(exclude,glob)**/.tmx-*"); err != nil {
 		return err
 	}
 	changed, err := g.command(root, "diff", "--cached", "--name-only")

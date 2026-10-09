@@ -107,7 +107,10 @@ Search covers the whole store. No category has priority or a separate informatio
 `tmix write NOTE` creates a note from stdin. Existing notes require `tmix write --overwrite NOTE`.
 `tmix append NOTE` adds stdin exactly. Supply your own newlines and separators.
 
-CAUTION: Serialize edits to the same note. Concurrent edits can lose updates, including edits from Obsidian.
-Atomic file publication does not prevent stale overwrites. Trailmix does not yet provide concurrency protection.
+Trailmix serializes writes and appends to the same note with `flock` on local macOS and Linux filesystems.
+Concurrent appends preserve each input. Overwrites can still replace changes made since an earlier read.
+CAUTION: Coordinate read-edit-overwrite sequences and Obsidian saves. Obsidian does not use Trailmix locks.
+Keep persistent `.tmx-lock-*` files in place while processes can use the vault. Their existence does not indicate an active lock.
+Search, links, and backups do not provide a consistent snapshot across notes. Network filesystems are not supported for locking.
 
 <!-- END GENERATED OPERATING GUIDE -->

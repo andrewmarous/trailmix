@@ -109,8 +109,11 @@ Search covers the whole store. No category has priority or a separate informatio
 `tmix write NOTE` creates a note from stdin. Existing notes require `tmix write --overwrite NOTE`.
 `tmix append NOTE` adds stdin exactly. Supply your own newlines and separators.
 
-CAUTION: Serialize edits to the same note. Concurrent edits can lose updates, including edits from Obsidian.
-Atomic file publication does not prevent stale overwrites. Trailmix does not yet provide concurrency protection.
+Trailmix serializes writes and appends to the same note with `flock` on local macOS and Linux filesystems.
+Concurrent appends preserve each input. Overwrites can still replace changes made since an earlier read.
+CAUTION: Coordinate read-edit-overwrite sequences and Obsidian saves. Obsidian does not use Trailmix locks.
+Keep persistent `.tmx-lock-*` files in place while processes can use the vault. Their existence does not indicate an active lock.
+Search, links, and backups do not provide a consistent snapshot across notes. Network filesystems are not supported for locking.
 
 <!-- END GENERATED OPERATING GUIDE -->
 
@@ -276,7 +279,7 @@ Git must be installed. Backups use your existing Git identity and SSH or HTTPS c
 
 Backup creates a Git repository inside the vault if necessary. It commits changes and deletions, then pushes the `main` branch.
 
-New snapshots exclude `.obsidian/` and temporary `.tmx-*` files. Git ignore rules also apply. Previously committed files remain in repository history.
+New snapshots exclude `.obsidian/`, temporary `.tmx-*` files, and persistent `.tmx-lock-*` files. Git ignore rules also apply. Previously committed files remain in repository history.
 
 Backup requires the local `main` branch. It does not pull, merge, force-push, create a hosted repository, or configure authentication.
 
@@ -290,7 +293,12 @@ The `trailmix/vault` package provides `Open`, `Init`, `Read`, `Write`, `Append`,
 
 Writes use a temporary file and atomic publication. New-note publication cannot replace an existing note.
 
-Concurrent edits to the same note can lose updates. Serialize edits until the tool has concurrency controls.
+Writes and appends use persistent per-note `.tmx-lock-*` files with `github.com/gofrs/flock` on local macOS and Linux filesystems.
+The lock covers the entire append operation. Different notes can change concurrently.
+The OS releases locks when the owning descriptors close, including after a process crash.
+Keep lock files in place while processes can use the vault. Removing a lock file can break mutual exclusion.
+Overwrites still accept stale content. Coordinate read-edit-overwrite sequences and Obsidian saves, which do not use these locks.
+Search, links, and backups do not provide a consistent snapshot across notes. Network filesystems are not supported for locking.
 
 Path checks prevent ordinary symlink escapes. They do not protect against an adversary who changes filesystem paths during an operation.
 

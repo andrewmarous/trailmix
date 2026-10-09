@@ -2,6 +2,7 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -88,7 +89,7 @@ func (v *Vault) Read(name string) ([]byte, error) {
 	return os.ReadFile(p)
 }
 
-func (v *Vault) Write(name string, content []byte, overwrite bool) error {
+func (v *Vault) Write(name string, content []byte, overwrite bool) (err error) {
 	p, err := v.note(name)
 	if err != nil {
 		return err
@@ -99,6 +100,16 @@ func (v *Vault) Write(name string, content []byte, overwrite bool) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}
+	lock, err := v.lockNote(p)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lock.Unlock()) }()
+	return publish(p, content, overwrite)
+}
+
+// publish requires the caller to hold the note lock.
+func publish(p string, content []byte, overwrite bool) error {
 	mode := fs.FileMode(0600)
 	if info, err := os.Stat(p); err == nil {
 		if !overwrite {
@@ -137,13 +148,28 @@ func (v *Vault) Write(name string, content []byte, overwrite bool) error {
 }
 
 // Append preserves the input exactly. Callers provide any desired separators.
-// Like editor saves, read-modify-write operations require external serialization.
-func (v *Vault) Append(name string, content []byte) error {
-	existing, err := v.Read(name)
+// The note lock covers the entire read-modify-write operation.
+func (v *Vault) Append(name string, content []byte) (err error) {
+	p, err := v.note(name)
 	if err != nil {
 		return err
 	}
-	return v.Write(name, append(existing, content...), true)
+	if !utf8.Valid(content) {
+		return fmt.Errorf("note content must be UTF-8")
+	}
+	lock, err := v.lockNote(p)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lock.Unlock()) }()
+	existing, err := os.ReadFile(p)
+	if err != nil {
+		return err
+	}
+	if !utf8.Valid(existing) {
+		return fmt.Errorf("note content must be UTF-8")
+	}
+	return publish(p, append(existing, content...), true)
 }
 
 type Result struct {

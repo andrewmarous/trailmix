@@ -49,6 +49,9 @@ func TestRemoteAndBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(root, "note.md"), []byte("memory"), 0600)
+	if err := os.WriteFile(filepath.Join(root, ".tmx-lock-note.md"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
 	os.WriteFile(filepath.Join(root, ".obsidian", "workspace.json"), []byte("private UI"), 0600)
 	if _, err := g.command(root, "init", "--initial-branch=main"); err != nil {
 		t.Fatal(err)
