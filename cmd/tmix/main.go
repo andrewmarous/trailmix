@@ -29,6 +29,8 @@ Commands:
   append  NOTE                   Append stdin exactly to an existing note
   remote  [-v | add NAME URL | remove NAME | rename OLD NEW | get-url NAME | set-url NAME URL]
   backup  [REMOTE]               Commit and push the vault (default: origin)
+  sync    [--enable | --disable | --status] [REMOTE]
+                                Sync now or manage automatic macOS sync
 Flags must precede positional arguments. --vault also works after COMMAND.
 `
 
@@ -68,7 +70,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	switch command {
-	case "init", "search", "links", "read", "write", "append", "remote", "backup":
+	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -76,8 +78,14 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	flags.SetOutput(diagnostics)
 	flags.StringVar(root, "vault", *root, "vault directory")
 	var overwrite, install, jsonOutput bool
+	var enableSync, disableSync, backgroundSync, syncStatus bool
 	limit := 10
 	switch command {
+	case "sync":
+		flags.BoolVar(&enableSync, "enable", false, "enable automatic sync every five minutes (macOS launchd or Linux systemd)")
+		flags.BoolVar(&disableSync, "disable", false, "disable automatic sync")
+		flags.BoolVar(&backgroundSync, "background", false, "run scheduled sync with logs")
+		flags.BoolVar(&syncStatus, "status", false, "show last successful sync")
 	case "init":
 		flags.BoolVar(&install, "install-obsidian", false, "install Obsidian with Homebrew (macOS) or apt (Linux .deb)")
 	case "write":
@@ -103,8 +111,8 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		// Preserve git remote's -v flag instead of parsing it as a CLI flag.
 		positional = args[1:]
 	}
-	if command == "remote" || command == "backup" {
-		if command == "backup" && len(positional) > 1 {
+	if command == "remote" || command == "backup" || command == "sync" {
+		if command != "remote" && len(positional) > 1 {
 			return fmt.Errorf("backup accepts at most one remote name")
 		}
 	} else if command == "init" {
@@ -127,8 +135,15 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if command == "write" || command == "append" || command == "backup" || command == "sync" {
+		unlock, err := backup.Lock(v.Root)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	switch command {
-	case "remote", "backup":
+	case "remote", "backup", "sync":
 		configDir, err := os.UserConfigDir()
 		if err != nil {
 			return err
@@ -140,6 +155,43 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		remote := "origin"
 		if len(positional) == 1 {
 			remote = positional[0]
+		}
+		if command == "sync" {
+			count := 0
+			for _, b := range []bool{enableSync, disableSync, backgroundSync, syncStatus} {
+				if b {
+					count++
+				}
+			}
+			if count > 1 {
+				return fmt.Errorf("choose only one sync option")
+			}
+			if enableSync || disableSync {
+				if err := g.Schedule(v.Root, remote, enableSync); err != nil {
+					return err
+				}
+				fmt.Fprintln(out, "Automatic sync enabled:", enableSync)
+				return nil
+			}
+			if syncStatus {
+				if _, err := os.Stat(filepath.Join(v.Root, ".tmx-sync-failing")); err == nil {
+					fmt.Fprintln(out, "Automatic sync is failing. Run tmix sync for details.")
+				}
+				data, err := os.ReadFile(filepath.Join(v.Root, ".tmx-last-sync"))
+				if os.IsNotExist(err) {
+					fmt.Fprintln(out, "No successful sync yet")
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "Last successful sync: %s", data)
+				return nil
+			}
+			if backgroundSync {
+				return g.Background(v.Root, remote)
+			}
+			return g.Sync(v.Root, remote)
 		}
 		return g.Backup(v.Root, remote)
 	case "init":
