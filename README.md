@@ -287,6 +287,56 @@ If a push fails, the local commit remains available for another attempt. If the 
 
 Use an empty remote repository for the first backup. Different vaults must use different remotes to avoid conflicting histories.
 
+## Automatic Git sync
+
+Use a private repository. Sync uploads notes and attachments, including secrets that these files contain.
+
+Configure the remote, then enable automatic sync:
+
+```sh
+tmix remote add origin git@github.com:YOUR-USER/YOUR-PRIVATE-REPO.git
+tmix sync --enable
+```
+
+On macOS, the launchd agent runs at login and every five minutes.
+On Linux, a systemd user timer runs after installation and every five minutes after each sync completes.
+Linux requires an active systemd user session. For sync after logout, enable user lingering with `loginctl enable-linger`.
+The executable must remain at its installed path.
+Only one automatic sync scheduler is supported per user. Enabling another vault replaces the previous scheduler.
+Git must have a configured identity and unattended access to the remote.
+
+Local reads and writes do not require network access. Each sync commits local changes, fetches, merges, and pushes.
+A failed push leaves local commits available for the next run. Sync never force-pushes.
+The exclusions from Git backups also apply to sync.
+
+On a new machine, configure the same remote and run `tmix sync`. An empty vault adopts the remote history.
+Existing unrelated histories do not merge automatically. Untracked file collisions stop sync without overwriting those files.
+
+Use these commands when needed:
+
+```sh
+tmix sync                   # Sync now
+tmix sync --status          # Show the last successful sync and background failure state
+tmix sync --disable         # Remove the scheduler
+tmix sync archive           # Sync with a different configured remote
+```
+
+On macOS, background logs are in `~/Library/Logs/Trailmix/sync.log`.
+On Linux, logs are in `$XDG_STATE_HOME/trailmix/sync.log`, or `~/.local/state/trailmix/sync.log` by default.
+Logs rotate at approximately 5 MiB.
+After 24 hours of continuous failures, the worker sends a macOS notification, at most once per day.
+Notifications require the worker to run. They cannot detect an unloaded or broken launchd agent.
+
+Merges run in a temporary Git worktree. A conflict stops sync without adding conflict markers to the live vault.
+Run `tmix sync` to see the error. Resolve conflicting history with Git before retrying sync.
+The original local and remote commits remain available. The temporary worktree is removed after each attempt.
+
+CLI writes, backups, and sync operations share a vault lock. Obsidian and other external editors do not use this lock.
+Avoid external edits during sync. The worker checks tracked changes before publication, but this check cannot eliminate editor races.
+
+On other operating systems, schedule `tmix sync` with the system scheduler.
+The existing `tmix backup` command remains push-only.
+
 ## Library
 
 The `trailmix/vault` package provides `Open`, `Init`, `Read`, `Write`, `Append`, and `Search`. The CLI handles arguments, stdin, and Obsidian installation.
@@ -301,6 +351,38 @@ Overwrites still accept stale content. Coordinate read-edit-overwrite sequences 
 Search, links, and backups do not provide a consistent snapshot across notes. Network filesystems are not supported for locking.
 
 Path checks prevent ordinary symlink escapes. They do not protect against an adversary who changes filesystem paths during an operation.
+
+## Scheduler installation tests
+
+These tests install real user schedulers. Run them only in disposable VMs or CI runners.
+They check installation, an automatic sync to a local Git remote, and scheduler removal.
+They do not need GitHub credentials or alter your host scheduler.
+
+For local VM tests, install Go and Lima. On Apple Silicon, also install Tart for macOS tests.
+The tests find `tart` on PATH, in `~/tart.app`, or in `/Applications/tart.app`.
+Set `TART_BIN` to the full executable path for another installation location.
+Then run:
+
+```sh
+make test-scheduler-vms                  # Linux and macOS, where supported
+make test-scheduler-vms PLATFORM=linux   # Lima Ubuntu VM
+make test-scheduler-vms PLATFORM=macos   # Tart macOS VM
+```
+
+The tests download VM images and delete their test VMs afterward. Image downloads can require many gigabytes.
+The Linux VM matches the host CPU architecture. Tart tests require an Apple Silicon Mac.
+On other hosts, the macOS test prints a skip message. An Intel Mac also skips because Tart requires Apple Silicon.
+Missing VM tools cause an error on supported hosts.
+
+The default macOS image is `ghcr.io/cirruslabs/macos-tahoe-base:latest`. Tart reuses cached images.
+Set `TART_IMAGE` to another trusted image or an existing local VM, such as `tahoe-base`.
+Tests create a disposable clone and leave the source VM unchanged.
+The macOS guest must have Git, Tart Guest Agent, and a logged-in GUI user session.
+The tests use the guest agent, so SSH credentials and sshpass are not necessary.
+The Linux guest must have internet access for package installation.
+
+`.github/workflows/scheduler.yml` runs native scheduler tests on Ubuntu and macOS, each on AMD64 and ARM64.
+CI also runs the unit tests and installs the CLI through `make install`.
 
 ## Tests
 

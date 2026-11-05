@@ -2,6 +2,8 @@
 package backup
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,7 +12,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
+
+var errNoContent = errors.New("vault has no committed content to back up")
 
 type Git struct {
 	Config   string
@@ -18,7 +23,9 @@ type Git struct {
 }
 
 func (g Git) command(dir string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	// Do not allow inherited Git overrides to redirect vault operations.
 	for _, e := range os.Environ() {
@@ -26,11 +33,12 @@ func (g Git) command(dir string, args ...string) ([]byte, error) {
 			cmd.Env = append(cmd.Env, e)
 		}
 	}
+	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	data, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git %s: %s", args[0], strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("git %s: %s: %w", args[0], strings.TrimSpace(stderr.String()), err)
 	}
 	return data, nil
 }
@@ -168,6 +176,18 @@ func (g Git) Backup(root, remote string) error {
 	if err := validURL(url); err != nil {
 		return err
 	}
+	if err := g.snapshot(root); err != nil {
+		return err
+	}
+	fmt.Fprintln(g.Err, "Pushing vault backup...")
+	if _, err := g.command(root, "push", url, "HEAD:refs/heads/main"); err != nil {
+		return fmt.Errorf("%w; local snapshot remains committed; no force-push attempted", err)
+	}
+	_, err = fmt.Fprintln(g.Out, "Vault backed up to", remote)
+	return err
+}
+
+func (g Git) snapshot(root string) error {
 	info, err := os.Lstat(root)
 	if err != nil {
 		return err
@@ -215,12 +235,7 @@ func (g Git) Backup(root, remote string) error {
 		}
 	}
 	if _, err := g.command(root, "rev-parse", "--verify", "HEAD"); err != nil {
-		return fmt.Errorf("vault has no committed content to back up")
+		return errNoContent
 	}
-	fmt.Fprintln(g.Err, "Pushing vault backup...")
-	if _, err := g.command(root, "push", url, "HEAD:refs/heads/main"); err != nil {
-		return fmt.Errorf("%w; local snapshot remains committed; no force-push attempted", err)
-	}
-	_, err = fmt.Fprintln(g.Out, "Vault backed up to", remote)
-	return err
+	return nil
 }

@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
-.PHONY: build install test vet clean docs docs-check
+.PHONY: build install test vet clean docs docs-check test-scheduler-vms
 
 docs:
 	go run ./internal/gendocs
@@ -28,6 +28,9 @@ install: build
 
 test: docs-check
 	go test -race ./...
+
+test-scheduler-vms:
+	bash tests/scheduler/vm.sh $(PLATFORM)
 
 vet:
 	go vet ./...

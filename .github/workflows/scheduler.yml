@@ -1,0 +1,58 @@
+name: Scheduler installation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scheduler:
+    name: ${{ matrix.os }} / ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+          - os: macos-15-intel
+            arch: amd64
+          - os: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check runner architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+      - name: Unit tests
+        run: make test vet
+      - name: Install CLI
+        run: make install BINDIR="$RUNNER_TEMP/trailmix/bin"
+      - name: Start Linux user session
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+      - name: Test actual scheduler
+        env:
+          TMIX_TEST_BINARY: ${{ runner.temp }}/trailmix/bin/tmix
+        run: bash tests/scheduler/smoke.sh
+      - name: Upload scheduler logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-${{ matrix.os }}-${{ matrix.arch }}
+          include-hidden-files: true
+          path: |
+            ~/Library/Logs/Trailmix/
+            ~/.local/state/trailmix/
