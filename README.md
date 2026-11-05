@@ -1,6 +1,83 @@
 # Trailmix
 
-`tmix` is a small CLI for a shared Markdown knowledge base. Obsidian is optional. No database, daemon, or runtime dependency is necessary.
+`tmix` gives your AI agents a shared Markdown memory store. Search past decisions, save notes on request, and browse them in Obsidian.
+The core CLI needs no database, daemon, account, or runtime dependency. Git backup and sync are optional.
+
+## Install
+
+Supported platforms: macOS and Linux, on Intel/AMD64 and ARM64. Windows is not supported in v0.1.0.
+
+With Homebrew:
+
+```sh
+brew install andrewmarous/tap/trailmix
+tmix --version
+```
+
+Without Homebrew, download your platform's archive from [GitHub Releases](https://github.com/andrewmarous/trailmix/releases/latest).
+Download `checksums.txt` into the same directory. Verify the archive with `sha256sum --check --ignore-missing checksums.txt` on Linux.
+On macOS, use `shasum -a 256 -c checksums.txt` and check that your archive reports `OK`. Missing archives are expected.
+Extract the archive, then install `tmix` in a directory on your `PATH`, such as `~/.local/bin`.
+Archives also contain the license, this README, and the agent skill.
+
+For a source installation with Go 1.24 or newer:
+
+```sh
+go install github.com/andrewmarous/trailmix/cmd/tmix@v0.1.0
+```
+
+Go installs the executable in `GOBIN`, or `~/go/bin` by default. This directory must be on `PATH`.
+Source installations report `dev` unless the build sets release metadata.
+
+## Quickstart
+
+Create your vault and save one note:
+
+```sh
+tmix init
+printf '# Retry policy\n\nRetry transient failures up to three times.\n' | tmix write decisions/retries
+tmix search retry
+tmix read decisions/retries
+```
+
+The default vault is `~/.trailmix`. Notes are ordinary Markdown files. Obsidian is optional.
+Notes are not encrypted. Keep secrets out of notes and use a private repository for remote backups.
+
+## Connect your agent
+
+Install the included `skills/trailmix` directory in your agent's skill directory. For example:
+
+```sh
+# Pi
+mkdir -p ~/.pi/agent/skills
+cp -R skills/trailmix ~/.pi/agent/skills/
+
+# Claude Code
+mkdir -p ~/.claude/skills
+cp -R skills/trailmix ~/.claude/skills/
+```
+
+Run these commands from the extracted release archive or repository checkout.
+Homebrew installs the skill under `$(brew --prefix trailmix)/share/trailmix/skills/trailmix`.
+For Homebrew, replace `skills/trailmix` in the copy command with that path.
+
+Restart your agent session so it can discover the skill. The `tmix` executable must be on the agent's `PATH`.
+These are manual setup instructions, not a promise of automated integration tests for each agent.
+
+Ask the agent: "Search Trailmix for the retry policy and report the note path. Do not save anything."
+The agent must find `decisions/retries.md`. Run `tmix instructions` to read the memory policy directly.
+
+## Upgrade and uninstall
+
+For Homebrew, run `brew update` and then `brew upgrade trailmix`.
+For a manual installation, replace the executable at the same path with the new release executable.
+After an upgrade, run `tmix --version` and `tmix sync --status` if you use automatic sync.
+
+Before uninstalling, run `tmix sync --disable` if you enabled automatic sync.
+Then run `brew uninstall trailmix`, or remove your manually installed executable and agent skill.
+Uninstallation does not remove `~/.trailmix`, remote backups, or user configuration.
+
+## Agent operating guide
 
 <!-- BEGIN GENERATED OPERATING GUIDE -->
 <!-- Source: guide/operating-guide.md. Run make docs; do not edit this copy. -->

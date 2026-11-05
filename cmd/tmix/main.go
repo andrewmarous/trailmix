@@ -11,9 +11,15 @@ import (
 	"runtime"
 	"strings"
 
-	"trailmix/backup"
-	"trailmix/guide"
-	"trailmix/vault"
+	"github.com/andrewmarous/trailmix/backup"
+	"github.com/andrewmarous/trailmix/guide"
+	"github.com/andrewmarous/trailmix/vault"
+)
+
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 const usage = `Usage: tmix [--vault PATH] COMMAND [options] [note/query]
@@ -30,7 +36,7 @@ Commands:
   remote  [-v | add NAME URL | remove NAME | rename OLD NEW | get-url NAME | set-url NAME URL]
   backup  [REMOTE]               Commit and push the vault (default: origin)
   sync    [--enable | --disable | --status] [REMOTE]
-                                Sync now or manage automatic macOS sync
+                                Sync now or manage automatic macOS/Linux sync
 Flags must precede positional arguments. --vault also works after COMMAND.
 `
 
@@ -42,6 +48,10 @@ func main() {
 }
 
 func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		_, err := fmt.Fprintf(out, "tmix %s (commit %s, built %s)\n", version, commit, date)
+		return err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err

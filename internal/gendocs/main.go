@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"trailmix/guide"
+	"github.com/andrewmarous/trailmix/guide"
 )
 
 const start = "<!-- BEGIN GENERATED OPERATING GUIDE -->\n"

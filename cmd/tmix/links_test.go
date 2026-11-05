@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"trailmix/vault"
+	"github.com/andrewmarous/trailmix/vault"
 )
 
 func TestLinksCLI(t *testing.T) {

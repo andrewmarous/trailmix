@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"trailmix/guide"
+	"github.com/andrewmarous/trailmix/guide"
 )
 
 func TestInstructions(t *testing.T) {

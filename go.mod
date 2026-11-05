@@ -1,4 +1,4 @@
-module trailmix
+module github.com/andrewmarous/trailmix
 
 go 1.24
 
