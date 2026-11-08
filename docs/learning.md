@@ -43,13 +43,18 @@ interval = "1h"
 [sync]
 remote = "origin"
 
+[sync.schedule]
+interval = "5m"
+
 # Optional named backup remotes. tmix remote also manages these.
 # [remotes]
 # origin = "git@example.com:you/memory.git"
 ```
 
 Use absolute paths or `~/` paths. An executable can also be a command name on PATH.
-Omit source keys to retain registry settings. Use empty strings to disable unavailable sources.
+Omitted source keys use the default directories. Empty strings disable sources.
+CLI source overrides apply only to the current scan or begin command.
+The registry records the last scan's sources for diagnostics, not configuration.
 The cutoff, discovery inventory, review progress, and worker results remain local state, not TOML settings.
 Initialization preserves the existing cutoff. Earlier turns remain excluded, not falsely marked reviewed.
 New turns in resumed older sessions remain eligible.
@@ -89,6 +94,22 @@ Both run from a temporary directory. Neither resumes your interactive session.
 Codex retains model/provider settings but disables MCP, app, browser, and computer tools for reviews.
 Treat the harness executable and its credential configuration as trusted software.
 
+## Manual guidance
+
+Save explicitly requested guidance without a model request or proposal file:
+
+```sh
+printf '# Retry policy\n\nRetry transient failures twice.\n' | tmix learning add procedures/retry
+```
+
+Use `tmix learning add --overwrite NOTE` with the complete Markdown to replace existing guidance.
+Guidance requires a Markdown title and at most 64 KiB per note.
+Manual and automatic guidance use the same publication checks.
+Manual guidance does not create or complete a transcript review.
+
+The separate manual evidence ledger and its record, status, begin, complete, and abort commands are removed.
+Existing `.learning/ledger.json` files remain untouched. No automatic migration reads or converts them.
+
 ## Review and publication
 
 With `publication = "proposals"`, the command reports a private `proposal_path` and `run_id`.
@@ -116,7 +137,8 @@ A valid result with no supported lesson also advances the reviewed snapshot.
 The worker requires a structured result and citations to pending turns; exit status zero alone is insufficient.
 These checks do not prove that every model-generated claim is correct.
 
-Publication checks existing-note baselines and validates wiki links in a staging vault.
+Publication checks existing-note baselines and validates all wiki links in a staging vault once per batch.
+A broken link anywhere in the vault prevents publication, including manual guidance.
 Conflicting edits fail rather than overwriting newer notes.
 A durable proposal supports idempotent retries after interrupted or partial publication.
 Review progress commits only after successful publication.
@@ -139,6 +161,10 @@ tmix learning schedule disable
 ```
 
 Enabling installs or updates one learning job for the current user. It requires no root access.
+Sync and learning use the same scheduler implementation but separate OS jobs and intervals.
+Neither job guarantees ordering relative to the other.
+Use `sync.schedule.interval` for sync and `learning.schedule.interval` for learning.
+Re-enable the affected job after changing its interval.
 Initialization alone never installs a job.
 
 - **macOS:** `~/Library/LaunchAgents/com.trailmix.learning.plist`, loaded into the GUI user session.
@@ -155,7 +181,9 @@ PATH is captured at installation so harness launchers can locate runtimes such a
 Shell startup scripts and shell-only credentials are not captured.
 Use a stable installed executable, not a temporary `go run` binary.
 Re-enable after interval, PATH, or executable-location changes. Other TOML edits apply on the next invocation.
-A temporary `--vault` override cannot configure the scheduled vault; set `vault.path` in TOML instead.
+Temporary vault and remote overrides cannot configure scheduled jobs.
+Set `vault.path` and `sync.remote` in TOML instead.
+Both jobs read the TOML file on each invocation.
 
 Status includes installed files, OS job state, and the last worker result.
 The registry directory's `last_job.json` is overwritten with bounded status metadata, not raw harness output.

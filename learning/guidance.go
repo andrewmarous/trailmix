@@ -139,10 +139,9 @@ func publishGuidance(root string, changes []Change, expected map[string]string) 
 	}); err != nil {
 		return err
 	}
-	for _, change := range changes {
-		if _, err = staged.Navigate(change.Path); err != nil {
-			return fmt.Errorf("guidance links invalid: %w", err)
-		}
+	// Navigate validates every link in the staged vault, regardless of this name.
+	if _, err = staged.Navigate(changes[0].Path); err != nil {
+		return fmt.Errorf("guidance links invalid: %w", err)
 	}
 	for _, change := range changes {
 		if err = real.WriteIfUnchanged(change.Path, []byte(change.Content), expected[change.Path]); err != nil {
