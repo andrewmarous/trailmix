@@ -2,7 +2,6 @@ package learning
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -25,13 +24,6 @@ func (s Store) Initialize() (string, error) {
 			r.LearningStartAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
 		start = r.LearningStartAt
-		if r.Sources == nil {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return err
-			}
-			r.Sources = DefaultSources(home)
-		}
 		if created && len(r.Sessions) > 0 {
 			return r.Scan(nil)
 		}

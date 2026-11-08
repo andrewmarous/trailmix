@@ -180,14 +180,6 @@ func (r *Registry) validate() error {
 	return nil
 }
 
-func DefaultSources(home string) []Source {
-	return []Source{
-		{Name: "pi-root", Harness: "pi", Root: filepath.Join(home, ".pi", "agent", "sessions")},
-		{Name: "codex-root", Harness: "codex", Root: filepath.Join(home, ".codex", "sessions")},
-		{Name: "codex-archive-root", Harness: "codex", Root: filepath.Join(home, ".codex", "archived_sessions")},
-	}
-}
-
 // Scan inventories configured roots without copying their transcripts. Missing
 // roots and malformed files remain visible in coverage/errors, not successes.
 func (r *Registry) Scan(sources []Source) error {

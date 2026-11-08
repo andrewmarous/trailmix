@@ -30,7 +30,7 @@ Options (before COMMAND):
   --codex-archive-root PATH  Codex archive root; empty disables archive discovery
 Run tmix init before scanning or reviewing. Only turns completed on or after
 learning_start_at are eligible. Earlier turns are excluded, not marked reviewed.
-Source overrides persist after scan/begin. All output is JSON.
+Source overrides apply only to this scan/begin. All output is JSON.
 This command tracks review progress; it does not run a model or publish notes.
 `
 
@@ -43,9 +43,9 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, config
 	flags.SetOutput(diagnostics)
 	state := flags.String("state-dir", learning.DefaultStateDir(home), "local registry directory")
 	startAt := flags.String("start-at", "", "learning cutoff, RFC3339 with timezone")
-	pi := flags.String("pi-root", "", "Pi sessions root")
-	codex := flags.String("codex-root", "", "Codex sessions root")
-	archive := flags.String("codex-archive-root", "", "Codex archive root")
+	flags.StringVar(&configured.Pi, "pi-root", configured.Pi, "Pi sessions root")
+	flags.StringVar(&configured.Codex, "codex-root", configured.Codex, "Codex sessions root")
+	flags.StringVar(&configured.CodexArchive, "codex-archive-root", configured.CodexArchive, "Codex archive root")
 	if err = flags.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			_, err = io.WriteString(out, sessionsUsage)
@@ -78,18 +78,14 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, config
 	if startProvided && action != "config" {
 		return fmt.Errorf("--start-at requires config")
 	}
-	overrides := map[string]string{}
+	sourceOverride := false
 	flags.Visit(func(f *flag.Flag) {
 		switch f.Name {
-		case "pi-root":
-			overrides[f.Name] = *pi
-		case "codex-root":
-			overrides[f.Name] = *codex
-		case "codex-archive-root":
-			overrides[f.Name] = *archive
+		case "pi-root", "codex-root", "codex-archive-root":
+			sourceOverride = true
 		}
 	})
-	if len(overrides) > 0 && action != "scan" && action != "begin" {
+	if sourceOverride && action != "scan" && action != "begin" {
 		return fmt.Errorf("source overrides require scan or begin")
 	}
 	var outcome []byte
@@ -106,36 +102,12 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, config
 	var operationErr error
 	store := learning.Store{Dir: *state}
 	err = store.Transaction(func(r *learning.Registry) error {
-		if r.Sources == nil {
-			r.Sources = learning.DefaultSources(home)
-		}
 		if action == "scan" || action == "begin" {
-			sources := learning.ConfiguredSources(home, configured, r.Sources)
-			if sources == nil {
-				sources = r.Sources
-			}
-			if len(overrides) > 0 {
-				persisted := map[string]learning.Source{}
-				for _, s := range sources {
-					persisted[s.Name] = s
-				}
-				sources = []learning.Source{}
-				for _, slot := range learning.DefaultSources(home) {
-					source, enabled := persisted[slot.Name]
-					root, override := overrides[slot.Name]
-					if override {
-						if root == "" {
-							continue
-						}
-						root, err = filepath.Abs(root)
-						if err != nil {
-							return err
-						}
-						source = learning.Source{Name: slot.Name, Harness: slot.Harness, Root: root}
-					} else if !enabled {
-						continue
-					}
-					sources = append(sources, source)
+			sources := learning.ConfiguredSources(configured)
+			for i := range sources {
+				sources[i].Root, err = filepath.Abs(config.Expand(sources[i].Root, home))
+				if err != nil {
+					return err
 				}
 			}
 			if err = r.Scan(sources); err != nil {
@@ -165,9 +137,6 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, config
 		case "read":
 			result, err = r.Read(args[1])
 		case "complete":
-			if err = r.Scan(nil); err != nil {
-				return err
-			}
 			result, err = r.Close(args[1], string(outcome), false)
 		case "abort":
 			result, err = r.Close(args[1], "", true)

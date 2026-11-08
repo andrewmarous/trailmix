@@ -108,28 +108,15 @@ func loadProposal(dir, id string) (Proposal, error) {
 	return p, err
 }
 
-// ConfiguredSources applies explicit TOML roots over retained registry settings.
-func ConfiguredSources(home string, settings config.Sources, existing []Source) []Source {
-	if settings.Pi == nil && settings.Codex == nil && settings.CodexArchive == nil {
-		return nil
-	}
-	values := map[string]*string{"pi-root": settings.Pi, "codex-root": settings.Codex, "codex-archive-root": settings.CodexArchive}
-	known := map[string]Source{}
-	for _, s := range existing {
-		known[s.Name] = s
-	}
+// ConfiguredSources returns enabled roots from config, never from scan history.
+func ConfiguredSources(settings config.Sources) []Source {
 	sources := []Source{}
-	for _, slot := range DefaultSources(home) {
-		s, enabled := known[slot.Name]
-		if value := values[slot.Name]; value != nil {
-			if *value == "" {
-				continue
-			}
-			s = slot
-			s.Root = *value
-			enabled = true
-		}
-		if enabled {
+	for _, s := range []Source{
+		{Name: "pi-root", Harness: "pi", Root: settings.Pi},
+		{Name: "codex-root", Harness: "codex", Root: settings.Codex},
+		{Name: "codex-archive-root", Harness: "codex", Root: settings.CodexArchive},
+	} {
+		if s.Root != "" {
 			sources = append(sources, s)
 		}
 	}
@@ -348,11 +335,7 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 				return e
 			}
 		}
-		home, e := os.UserHomeDir()
-		if e != nil {
-			return e
-		}
-		if e := r.Scan(ConfiguredSources(home, c.Learning.Sources, r.Sources)); e != nil {
+		if e := r.Scan(ConfiguredSources(c.Learning.Sources)); e != nil {
 			return e
 		}
 		for _, s := range r.Sources {

@@ -25,9 +25,9 @@ type Vault struct {
 	Path string `toml:"path"`
 }
 type Sources struct {
-	Pi           *string `toml:"pi,omitempty"`
-	Codex        *string `toml:"codex,omitempty"`
-	CodexArchive *string `toml:"codex_archive,omitempty"`
+	Pi           string `toml:"pi"`
+	Codex        string `toml:"codex"`
+	CodexArchive string `toml:"codex_archive"`
 }
 type Learning struct {
 	Sources       Sources  `toml:"sources"`
@@ -61,6 +61,11 @@ func Defaults(home string) Config {
 	c.Learning.MaxTurns = 20
 	c.Learning.MaxInputBytes = 2 * 1024 * 1024
 	c.Learning.Schedule.Interval = "1h"
+	c.Learning.Sources = Sources{
+		Pi:           filepath.Join(home, ".pi", "agent", "sessions"),
+		Codex:        filepath.Join(home, ".codex", "sessions"),
+		CodexArchive: filepath.Join(home, ".codex", "archived_sessions"),
+	}
 	return c
 }
 func Load(path, home string) (Config, error) {
@@ -86,8 +91,8 @@ func Load(path, home string) (Config, error) {
 	}
 	c.Vault.Path = filepath.Clean(Expand(c.Vault.Path, home))
 	c.Learning.StateDir = filepath.Clean(Expand(c.Learning.StateDir, home))
-	for _, root := range []*string{c.Learning.Sources.Pi, c.Learning.Sources.Codex, c.Learning.Sources.CodexArchive} {
-		if root != nil && *root != "" {
+	for _, root := range []*string{&c.Learning.Sources.Pi, &c.Learning.Sources.Codex, &c.Learning.Sources.CodexArchive} {
+		if *root != "" {
 			*root = Expand(*root, home)
 			if !filepath.IsAbs(*root) {
 				return c, fmt.Errorf("learning source roots must be absolute paths or empty to disable")
@@ -160,7 +165,7 @@ max_turns = 20
 max_input_bytes = 2097152
 
 [learning.sources]
-# Omitted roots retain registry settings. Empty strings disable a source.
+# Omitted roots use defaults. Empty strings disable a source.
 # pi = "~/.pi/agent/sessions"
 # codex = "~/.codex/sessions"
 # codex_archive = "~/.codex/archived_sessions"

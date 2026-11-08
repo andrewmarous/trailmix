@@ -28,6 +28,7 @@ func workerFixture(t *testing.T, harness, policy string) (config.Config, string)
 	}
 	source := filepath.Join(home, "source")
 	timedPi(t, filepath.Join(source, "pi.jsonl"), "p", "2000-01-01T00:00:00Z", "2000-01-02T00:00:00Z")
+	c.Learning.Sources = config.Sources{Pi: source}
 	store := Store{Dir: c.Learning.StateDir}
 	if _, err := store.Initialize(); err != nil {
 		t.Fatal(err)
@@ -266,14 +267,19 @@ func TestPublicationPreservesAttachmentLinks(t *testing.T) {
 	assertReviewed(t, c, 1)
 }
 
-func TestConfiguredSourcesRetainAndDisable(t *testing.T) {
-	home := t.TempDir()
-	disabled := ""
-	custom := filepath.Join(home, "custom-pi")
-	sources := ConfiguredSources(home, config.Sources{Pi: &custom, CodexArchive: &disabled}, DefaultSources(home))
-	if len(sources) != 2 || sources[0].Root != custom || sources[1].Name != "codex-root" {
-		t.Fatalf("bad configured sources: %+v", sources)
+func TestWorkerUsesConfigInsteadOfRememberedSources(t *testing.T) {
+	c, _ := workerFixture(t, "pi", "automatic")
+	c.Learning.Sources = config.Sources{}
+	s, err := RunOnce(context.Background(), c)
+	if err != nil || s.Status != "no_work" {
+		t.Fatalf("disabled sources still produced work: %+v %v", s, err)
 	}
+	c.Learning.Sources.Pi = filepath.Join(filepath.Dir(c.Vault.Path), "source")
+	s, err = RunOnce(context.Background(), c)
+	if err != nil || s.Status != "completed" {
+		t.Fatalf("configured source was not reviewed: %+v %v", s, err)
+	}
+	assertReviewed(t, c, 1)
 }
 
 func TestAdapterTimeout(t *testing.T) {

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,9 +42,13 @@ func TestSessionsCLIConfigurationAndProgress(t *testing.T) {
 	if err := os.WriteFile(path, []byte(transcript), 0600); err != nil {
 		t.Fatal(err)
 	}
+	configPath := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("[learning.sources]\npi = %q\ncodex = \"\"\ncodex_archive = %q\n", pi, archive)), 0600); err != nil {
+		t.Fatal(err)
+	}
 	call := func(input string, args ...string) ([]byte, error) {
 		var out bytes.Buffer
-		err := run(append([]string{"--vault", filepath.Join(root, "unused-vault"), "learning", "sessions", "--state-dir", state}, args...), strings.NewReader(input), &out, &out)
+		err := run(append([]string{"--config", configPath, "--vault", filepath.Join(root, "unused-vault"), "learning", "sessions", "--state-dir", state}, args...), strings.NewReader(input), &out, &out)
 		return out.Bytes(), err
 	}
 	must := func(input string, args ...string) []byte {
@@ -62,12 +67,16 @@ func TestSessionsCLIConfigurationAndProgress(t *testing.T) {
 	if len(registry.Sources) != 2 || len(registry.Sessions) != 1 {
 		t.Fatalf("bad discovery: %+v", registry)
 	}
-	// An override of one slot must not turn a disabled active root back on or
-	// move the archive into the active slot.
-	must("", "--pi-root", pi, "scan")
+	// A disabled CLI source applies only to this scan. TOML wins on the next one.
+	must("", "--pi-root", "", "scan")
 	json.Unmarshal(must("", "status"), &registry)
-	if len(registry.Sources) != 2 || registry.Sources[1].Name != "codex-archive-root" {
-		t.Fatalf("source configuration changed: %+v", registry.Sources)
+	if len(registry.Sources) != 1 || registry.Sources[0].Name != "codex-archive-root" {
+		t.Fatalf("temporary override ignored: %+v", registry.Sources)
+	}
+	must("", "scan")
+	json.Unmarshal(must("", "status"), &registry)
+	if len(registry.Sources) != 2 || registry.Sources[0].Root != pi || registry.Sources[1].Root != archive {
+		t.Fatalf("temporary override persisted: %+v", registry.Sources)
 	}
 	var review learning.Run
 	if err := json.Unmarshal(must("", "begin", "pi/one"), &review); err != nil {
@@ -105,8 +114,11 @@ func TestSessionsCLIConfigurationAndProgress(t *testing.T) {
 }
 
 func TestSessionsBeginPersistsCoverageErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	var out bytes.Buffer
-	state := filepath.Join(t.TempDir(), "state")
+	state := filepath.Join(home, "state")
 	initializeTestLearning(t, state)
 	args := []string{"learning", "sessions", "--state-dir", state, "--pi-root", "", "--codex-root", "", "--codex-archive-root", "", "begin"}
 	if err := run(args, strings.NewReader(""), &out, &out); err == nil {
