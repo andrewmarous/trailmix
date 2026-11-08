@@ -13,6 +13,7 @@ import (
 
 	"github.com/andrewmarous/trailmix/backup"
 	"github.com/andrewmarous/trailmix/guide"
+	"github.com/andrewmarous/trailmix/learning"
 	"github.com/andrewmarous/trailmix/vault"
 )
 
@@ -26,8 +27,12 @@ const usage = `Usage: tmix [--vault PATH] COMMAND [options] [note/query]
 Run tmix instructions for when to search, how to search, what to preserve,
 and how to correct shared memory. Write only on explicit user request.
 Commands:
+  learning [--vault PATH] status | record SESSION | begin | complete RUN | abort RUN
+                                Track evidence and learning review snapshots (JSON)
+  learning sessions help        Discover Pi/Codex sessions and track reviewed turns
   instructions                  Print the operating guide
-  init    [--install-obsidian]    Create the vault; optionally install Obsidian
+  init    [--install-obsidian] [--learning-state-dir PATH]
+                                Create the vault and initialize the learning cutoff
   search  [--limit N] [--json] QUERY
   links   [--json] NOTE          Resolve outgoing links and backlinks
   read    NOTE                   Print Markdown
@@ -79,6 +84,9 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		_, err := io.WriteString(out, guide.Text)
 		return err
 	}
+	if command == "learning" {
+		return runLearning(args[1:], *root, in, out, diagnostics)
+	}
 	switch command {
 	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
 	default:
@@ -88,6 +96,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	flags.SetOutput(diagnostics)
 	flags.StringVar(root, "vault", *root, "vault directory")
 	var overwrite, install, jsonOutput bool
+	learningStateDir := learning.DefaultStateDir(home)
 	var enableSync, disableSync, backgroundSync, syncStatus bool
 	limit := 10
 	switch command {
@@ -97,6 +106,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		flags.BoolVar(&backgroundSync, "background", false, "run scheduled sync with logs")
 		flags.BoolVar(&syncStatus, "status", false, "show last successful sync")
 	case "init":
+		flags.StringVar(&learningStateDir, "learning-state-dir", learningStateDir, "machine-local learning registry directory")
 		flags.BoolVar(&install, "install-obsidian", false, "install Obsidian with Homebrew (macOS) or apt (Linux .deb)")
 	case "write":
 		flags.BoolVar(&overwrite, "overwrite", false, "replace an existing note")
@@ -208,7 +218,12 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		if err := v.Init(); err != nil {
 			return err
 		}
+		start, err := (learning.Store{Dir: learningStateDir}).Initialize()
+		if err != nil {
+			return fmt.Errorf("initialize learning state: %w (vault remains ready)", err)
+		}
 		fmt.Fprintln(out, "Vault ready:", v.Root)
+		fmt.Fprintln(out, "Learning starts at:", start)
 		if obsidianInstalled(home) {
 			fmt.Fprintln(out, "Obsidian detected. Open this folder as a vault.")
 			return nil

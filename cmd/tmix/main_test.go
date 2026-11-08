@@ -8,6 +8,7 @@ import (
 )
 
 func TestCLI(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := filepath.Join(t.TempDir(), "vault")
 	invoke := func(input string, args ...string) (string, error) {
 		t.Helper()

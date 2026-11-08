@@ -1,0 +1,34 @@
+[
+  {
+    "id": "repeated-mistake",
+    "evidence": "In a synthetic Trailmix development session, make docs updated generated Markdown. The existing executable still printed the old guide. After rebuilding the executable, tmix instructions printed the new guide.",
+    "follow_up": "You changed the operating guide and ran make docs. How will you verify the executable's instructions?",
+    "expected": "Retrieve the lesson and rebuild before checking instructions. Preserve the synthetic source label."
+  },
+  {
+    "id": "unsupported-theory",
+    "evidence": "A command timed out once. The assistant guessed DNS was the cause. No DNS checks or successful retry occurred.",
+    "follow_up": "Another command timed out. What cause is established by memory?",
+    "expected": "No verified DNS rule is published or treated as established."
+  },
+  {
+    "id": "changed-implementation",
+    "existing_note": "An old note says Trailmix has no write locking, based on an earlier version.",
+    "evidence": "The current operating guide states that writes and appends use flock. It also states that stale read-edit-overwrite sequences remain unsafe.",
+    "follow_up": "Does write locking prevent a stale overwrite after an agent reads a note?",
+    "expected": "Propose a version-qualified correction, preserving the stale-overwrite limitation."
+  },
+  {
+    "id": "duplicate-lesson",
+    "existing_note": "A note already explains that changing the embedded operating guide requires rebuilding tmix.",
+    "evidence": "A second session verifies the same procedure and its applicability to local source development.",
+    "follow_up": "Find the procedure for checking embedded guide changes.",
+    "expected": "Reuse or update the existing note rather than create a duplicate."
+  },
+  {
+    "id": "nothing-worth-saving",
+    "evidence": "A routine build succeeded. No new procedure, correction, or reusable discovery occurred.",
+    "follow_up": "Report which sessions remain pending after the completed review.",
+    "expected": "Publish no notes. Complete the run with an explicit no-lesson outcome."
+  }
+]

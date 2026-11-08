@@ -4,8 +4,12 @@ binary="${1:?binary path required}"
 expected="${2:?version required}"
 "$binary" --version | grep -F "tmix $expected (commit "
 vault="$(mktemp -d)"
-trap 'rm -rf "$vault"' EXIT
-"$binary" --vault "$vault" init
+state="$(mktemp -d)"
+trap 'rm -rf "$vault" "$state"' EXIT
+"$binary" --vault "$vault" init --learning-state-dir "$state"
+cutoff="$("$binary" learning sessions --state-dir "$state" config)"
+"$binary" --vault "$vault" init --learning-state-dir "$state" > /dev/null
+test "$cutoff" = "$("$binary" learning sessions --state-dir "$state" config)"
 printf '# Release check\n\nFind this release-check-marker.\n' | "$binary" --vault "$vault" write inbox/check
 "$binary" --vault "$vault" search release-check-marker | grep -F 'inbox/check.md'
 "$binary" --vault "$vault" read inbox/check | grep -F 'release-check-marker'
