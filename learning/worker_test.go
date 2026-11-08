@@ -209,8 +209,7 @@ func TestPublicationRejectsConcurrentEditAndBadLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, _ := vault.Open(c.Vault.Path)
-	if err = v.Write("procedures/retry", []byte("# A concurrent edit\n"), false); err != nil {
+	if err = AddGuidance(c.Vault.Path, "procedures/retry", "# A concurrent edit\n", false); err != nil {
 		t.Fatal(err)
 	}
 	if err = ApplyProposal(c, s.RunID); err == nil {

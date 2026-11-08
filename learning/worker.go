@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/andrewmarous/trailmix/backup"
 	"github.com/andrewmarous/trailmix/config"
@@ -215,26 +214,12 @@ func validateResult(r Result, packets []Packet) error {
 	if strings.TrimSpace(r.Summary) == "" || len(r.Summary) > 4096 || r.Changes == nil || len(r.Changes) > 20 {
 		return fmt.Errorf("invalid structured review result")
 	}
-	seen := map[string]bool{}
+	if err := validateChanges(r.Changes); err != nil {
+		return err
+	}
 	for _, change := range r.Changes {
-		name := change.Path
-		if !strings.HasSuffix(name, ".md") || strings.ContainsAny(name, "\\:\x00") || filepath.IsAbs(name) || filepath.ToSlash(filepath.Clean(name)) != name {
-			return fmt.Errorf("unsafe proposed note path")
-		}
-		for _, part := range strings.Split(name, "/") {
-			if part == "" || strings.HasPrefix(part, ".") {
-				return fmt.Errorf("unsafe proposed note path")
-			}
-		}
-		if seen[name] {
-			return fmt.Errorf("duplicate proposed path %s", name)
-		}
-		seen[name] = true
-		if !utf8.ValidString(change.Content) || !strings.HasPrefix(strings.TrimSpace(change.Content), "# ") || len(change.Content) > 64*1024 {
-			return fmt.Errorf("proposed note needs a Markdown title and at most 64 KiB: %s", name)
-		}
 		if len(change.Evidence) == 0 || len(change.Evidence) > 100 {
-			return fmt.Errorf("proposed note requires 1 to 100 pending-turn citations: %s", name)
+			return fmt.Errorf("proposed note requires 1 to 100 pending-turn citations: %s", change.Path)
 		}
 		for _, e := range change.Evidence {
 			found := false
@@ -459,86 +444,6 @@ func ApplyProposal(c config.Config, id string) error {
 		if _, err = r.Close(id, p.Result.Summary, false); err != nil {
 			return err
 		}
-		if len(p.Result.Changes) == 0 {
-			return nil
-		}
-		notes, err := collectNotes(c.Vault.Path, 16*1024*1024)
-		if err != nil {
-			return err
-		}
-		stage, err := os.MkdirTemp("", "tmix-proposal-*")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(stage)
-		staged, _ := vault.Open(stage)
-		real, _ := vault.Open(c.Vault.Path)
-		for path, body := range notes {
-			if err = staged.Write(path, []byte(body), false); err != nil {
-				return err
-			}
-		}
-		for _, change := range p.Result.Changes {
-			expected, ok := p.Expected[change.Path]
-			if !ok {
-				return fmt.Errorf("proposal lacks a baseline")
-			}
-			actual := ""
-			body, exists := notes[change.Path]
-			if exists {
-				actual = fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
-			}
-			if actual != expected && (!exists || body != change.Content) {
-				return fmt.Errorf("note changed since review: %s", change.Path)
-			}
-			if err = staged.Write(change.Path, []byte(change.Content), true); err != nil {
-				return err
-			}
-		}
-		// Link resolution needs attachment names, not their potentially large
-		// or sensitive bodies. Mirror visible regular attachment targets only.
-		if err = filepath.WalkDir(c.Vault.Path, func(path string, d fs.DirEntry, e error) error {
-			if e != nil {
-				return e
-			}
-			if path != c.Vault.Path && strings.HasPrefix(d.Name(), ".") {
-				if d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if d.IsDir() || d.Type()&os.ModeSymlink != 0 || strings.EqualFold(filepath.Ext(path), ".md") {
-				return nil
-			}
-			info, e := d.Info()
-			if e != nil {
-				return e
-			}
-			if !info.Mode().IsRegular() {
-				return nil
-			}
-			rel, e := filepath.Rel(c.Vault.Path, path)
-			if e != nil {
-				return e
-			}
-			target := filepath.Join(stage, rel)
-			if e = os.MkdirAll(filepath.Dir(target), 0700); e != nil {
-				return e
-			}
-			return os.WriteFile(target, nil, 0600)
-		}); err != nil {
-			return err
-		}
-		for _, change := range p.Result.Changes {
-			if _, err = staged.Navigate(change.Path); err != nil {
-				return fmt.Errorf("proposed links invalid: %w", err)
-			}
-		}
-		for _, change := range p.Result.Changes {
-			if err = real.WriteIfUnchanged(change.Path, []byte(change.Content), p.Expected[change.Path]); err != nil {
-				return err
-			}
-		}
-		return nil
+		return publishGuidance(c.Vault.Path, p.Result.Changes, p.Expected)
 	})
 }

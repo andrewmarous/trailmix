@@ -28,8 +28,8 @@ const usage = `Usage: tmix [--config PATH] [--vault PATH] COMMAND [options] [not
 Run tmix instructions for when to search, how to search, what to preserve,
 and how to correct shared memory. Write only on explicit user request.
 Commands:
-  learning [--vault PATH] status | record SESSION | begin | complete RUN | abort RUN
-                                Track evidence and learning review snapshots (JSON)
+  learning add [--overwrite] NOTE
+                                Publish manual guidance from stdin without a proposal
   learning sessions help        Discover Pi/Codex sessions and track reviewed turns
   learning run                  Run a bounded learning pass with Pi or Codex
   learning doctor [--probe]     Check readiness; --probe makes a real model request
