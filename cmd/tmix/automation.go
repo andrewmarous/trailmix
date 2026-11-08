@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/learning"
@@ -97,7 +96,7 @@ func runAutomation(args []string, root string, c config.Config, configPath strin
 		if len(args) != 2 {
 			return fmt.Errorf("usage: tmix learning schedule enable | disable | status")
 		}
-		m, err := schedule.New(configPath)
+		m, err := schedule.New(configPath, "learning")
 		if err != nil {
 			return err
 		}
@@ -120,7 +119,10 @@ func runAutomation(args []string, root string, c config.Config, configPath strin
 			if _, err = os.Stat(c.Vault.Path); err != nil {
 				return fmt.Errorf("initialize the configured vault first: %w", err)
 			}
-			interval, _ := time.ParseDuration(c.Learning.Schedule.Interval)
+			interval, err := c.Learning.Schedule.Duration()
+			if err != nil {
+				return err
+			}
 			if err = m.Enable(interval); err != nil {
 				return err
 			}

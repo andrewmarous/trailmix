@@ -14,7 +14,7 @@ import (
 func manager(t *testing.T, platform string) Manager {
 	t.Helper()
 	home := t.TempDir()
-	return Manager{OS: platform, Home: home, ConfigHome: filepath.Join(home, "config"), Executable: "/bin/tmix with spaces/%h", ConfigPath: "/config/trailmix & more/config.toml", Path: "/opt/homebrew/bin:/usr/bin", UID: 501}
+	return Manager{Task: "learning", OS: platform, Home: home, ConfigHome: filepath.Join(home, "config"), Executable: "/bin/tmix with spaces/%h", ConfigPath: "/config/trailmix & more/config.toml", Path: "/opt/homebrew/bin:/usr/bin", UID: 501}
 }
 func TestRenderBothSchedulers(t *testing.T) {
 	for _, platform := range []string{"darwin", "linux"} {
@@ -41,7 +41,7 @@ func TestRenderBothSchedulers(t *testing.T) {
 						t.Fatal(body)
 					}
 				} else if strings.Contains(body, "ExecStart=") {
-					if !strings.Contains(body, `"/bin/tmix with spaces/%%h" --config "/config/trailmix & more/config.toml" learning run`) {
+					if !strings.Contains(body, `"/bin/tmix with spaces/%%h" "--config" "/config/trailmix & more/config.toml" "learning" "run"`) {
 						t.Fatal(body)
 					}
 				} else if !strings.Contains(body, "OnUnitInactiveSec=3600s") {
@@ -55,6 +55,7 @@ func TestInstallUpdateDisableAndRollback(t *testing.T) {
 	for _, platform := range []string{"darwin", "linux"} {
 		t.Run(platform, func(t *testing.T) {
 			m := manager(t, platform)
+			label, _, _ := m.names()
 			loaded := false
 			fail := false
 			m.Command = func(name string, args ...string) ([]byte, error) {

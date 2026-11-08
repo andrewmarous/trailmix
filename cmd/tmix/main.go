@@ -129,7 +129,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	limit := 10
 	switch command {
 	case "sync":
-		flags.BoolVar(&enableSync, "enable", false, "enable automatic sync every five minutes (macOS launchd or Linux systemd)")
+		flags.BoolVar(&enableSync, "enable", false, "enable automatic sync at sync.schedule.interval")
 		flags.BoolVar(&disableSync, "disable", false, "disable automatic sync")
 		flags.BoolVar(&backgroundSync, "background", false, "run scheduled sync with logs")
 		flags.BoolVar(&syncStatus, "status", false, "show last successful sync")
@@ -232,7 +232,16 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 				return fmt.Errorf("choose only one sync option")
 			}
 			if enableSync || disableSync {
-				if err := g.Schedule(v.Root, remote, enableSync); err != nil {
+				interval, err := cfg.Sync.Schedule.Duration()
+				if enableSync {
+					if err != nil {
+						return err
+					}
+					if v.Root != cfg.Vault.Path || remote != cfg.Sync.Remote {
+						return fmt.Errorf("save vault.path and sync.remote in config.toml before scheduling; do not use temporary overrides")
+					}
+				}
+				if err := g.Schedule(remote, interval, enableSync); err != nil {
 					return err
 				}
 				fmt.Fprintln(out, "Automatic sync enabled:", enableSync)

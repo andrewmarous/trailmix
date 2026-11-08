@@ -19,7 +19,8 @@ type Config struct {
 	Learning Learning          `toml:"learning"`
 }
 type Sync struct {
-	Remote string `toml:"remote"`
+	Remote   string   `toml:"remote"`
+	Schedule Schedule `toml:"schedule"`
 }
 type Vault struct {
 	Path string `toml:"path"`
@@ -55,6 +56,7 @@ func Path(home string) string {
 func Defaults(home string) Config {
 	var c Config
 	c.Sync.Remote = "origin"
+	c.Sync.Schedule.Interval = "5m"
 	c.Vault.Path = filepath.Join(home, ".trailmix")
 	c.Learning.StateDir = filepath.Join(home, ".local", "state", "trailmix", "learning")
 	c.Learning.Timeout = "20m"
@@ -138,17 +140,25 @@ func (c Config) ValidateLearning() error {
 	if err != nil || d < time.Second || d > time.Hour {
 		return fmt.Errorf("learning.timeout must be between 1s and 1h")
 	}
-	d, err = time.ParseDuration(l.Schedule.Interval)
+	_, err = l.Schedule.Duration()
+	return err
+}
+
+func (s Schedule) Duration() (time.Duration, error) {
+	d, err := time.ParseDuration(s.Interval)
 	if err != nil || d < time.Minute || d > 7*24*time.Hour || d%time.Second != 0 {
-		return fmt.Errorf("learning.schedule.interval must be whole seconds between 1m and 168h")
+		return 0, fmt.Errorf("schedule interval must be whole seconds between 1m and 168h")
 	}
-	return nil
+	return d, nil
 }
 
 const Template = `# Machine-local settings. Authenticate through Pi or Codex, not this file.
 # Named remotes can be managed with tmix remote; legacy remotes migrate on edit.
 [sync]
 remote = "origin"
+
+[sync.schedule]
+interval = "5m"
 
 [vault]
 path = "~/.trailmix"

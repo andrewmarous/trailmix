@@ -2,24 +2,18 @@ package backup
 
 import (
 	"bytes"
-	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"time"
+
+	"github.com/andrewmarous/trailmix/schedule"
 )
 
-func xmlText(s string) string {
-	var b bytes.Buffer
-	_ = xml.EscapeText(&b, []byte(s))
-	return b.String()
-}
-
-// Schedule installs or removes the current user's sync scheduler.
-func (g Git) Schedule(root, remote string, enable bool) error {
+// Schedule installs or removes the current user's sync job.
+func (g Git) Schedule(remote string, interval time.Duration, enable bool) error {
 	if enable {
 		remotes, err := g.load()
 		if err != nil {
@@ -33,59 +27,14 @@ func (g Git) Schedule(root, remote string, enable bool) error {
 			return err
 		}
 	}
-	if runtime.GOOS == "linux" {
-		return scheduleSystemd(root, remote, enable, g.AppConfig)
-	}
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("automatic scheduling requires macOS or Linux with a systemd user session")
-	}
-	home, err := os.UserHomeDir()
+	m, err := schedule.New(g.AppConfig, "sync")
 	if err != nil {
 		return err
 	}
-	exe, err := os.Executable()
-	if err != nil {
-		return err
+	if enable {
+		return m.Enable(interval)
 	}
-	label := "com.trailmix.sync"
-	path := filepath.Join(home, "Library", "LaunchAgents", label+".plist")
-	domain := "gui/" + strconv.Itoa(os.Getuid())
-	if !enable {
-		_ = exec.Command("launchctl", "bootout", domain+"/"+label).Run()
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	logDir := filepath.Join(home, "Library", "Logs", "Trailmix")
-	if err := os.MkdirAll(logDir, 0700); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	configArgs := ""
-	if g.AppConfig != "" {
-		configArgs = "<string>--config</string><string>" + xmlText(g.AppConfig) + "</string>"
-	}
-	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>Label</key><string>%s</string>
-<key>ProgramArguments</key><array><string>%s</string>%s<string>--vault</string><string>%s</string><string>sync</string><string>--background</string><string>%s</string></array>
-<key>StartInterval</key><integer>300</integer><key>RunAtLoad</key><true/>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
-</dict></plist>
-`, label, xmlText(exe), configArgs, xmlText(root), xmlText(remote))
-	if err := os.WriteFile(path, []byte(plist), 0600); err != nil {
-		return err
-	}
-	_ = exec.Command("launchctl", "bootout", domain+"/"+label).Run()
-	out, err := exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("install sync agent: %s: %w", out, err)
-	}
-	return nil
+	return m.Disable()
 }
 
 // Background writes bounded logs and reports persistent failures at most daily.

@@ -39,6 +39,25 @@ func TestConfigDefaultsAndStrictTOML(t *testing.T) {
 		t.Fatal("typo silently ignored")
 	}
 }
+func TestSourceDefaultsAndOverrides(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(path, []byte("[learning.sources]\npi = '~/custom'\ncodex = ''\n[sync.schedule]\ninterval = '7m'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Learning.Sources.Pi != filepath.Join(home, "custom") || c.Learning.Sources.Codex != "" || c.Learning.Sources.CodexArchive != filepath.Join(home, ".codex", "archived_sessions") {
+		t.Fatalf("wrong source configuration: %+v", c.Learning.Sources)
+	}
+	interval, err := c.Sync.Schedule.Duration()
+	if err != nil || interval.Seconds() != 420 {
+		t.Fatalf("wrong sync interval: %s %v", interval, err)
+	}
+}
+
 func TestRemoteMigrationPreservesSettingsAndEmptyMap(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

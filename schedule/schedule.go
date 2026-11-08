@@ -1,4 +1,4 @@
-// Package schedule installs the current user's learning job without root access.
+// Package schedule installs the current user's sync and learning jobs without root access.
 package schedule
 
 import (
@@ -17,11 +17,8 @@ import (
 	"github.com/gofrs/flock"
 )
 
-const label = "com.trailmix.learning"
-const service = "trailmix-learning.service"
-const timer = "trailmix-learning.timer"
-
 type Manager struct {
+	Task       string
 	OS         string
 	Home       string
 	ConfigHome string
@@ -40,7 +37,7 @@ type Status struct {
 	Error     string   `json:"error,omitempty"`
 }
 
-func New(configPath string) (Manager, error) {
+func New(configPath, task string) (Manager, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Manager{}, err
@@ -60,7 +57,7 @@ func New(configPath string) (Manager, error) {
 	if configHome == "" {
 		configHome = filepath.Join(home, ".config")
 	}
-	return Manager{OS: runtime.GOOS, Home: home, ConfigHome: configHome, Executable: exe, ConfigPath: configPath, Path: os.Getenv("PATH"), UID: os.Getuid()}, nil
+	return Manager{Task: task, OS: runtime.GOOS, Home: home, ConfigHome: configHome, Executable: exe, ConfigPath: configPath, Path: os.Getenv("PATH"), UID: os.Getuid()}, nil
 }
 func (m Manager) command(name string, args ...string) ([]byte, error) {
 	if m.Command != nil {
@@ -71,7 +68,7 @@ func (m Manager) command(name string, args ...string) ([]byte, error) {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+		return nil, fmt.Errorf("%s %s: %s: %w", name, strings.Join(args, " "), strings.TrimSpace(string(out)), err)
 	}
 	return out, nil
 }
@@ -89,6 +86,10 @@ func argument(s string) string {
 // Environment= does not expand $, unlike ExecStart=. Both expand % specifiers.
 func environmentArgument(s string) string { return strings.ReplaceAll(argument(s), "$$", "$") }
 func (m Manager) files() ([]string, error) {
+	if m.Task != "learning" && m.Task != "sync" {
+		return nil, fmt.Errorf("unknown scheduled task %q", m.Task)
+	}
+	label, service, timer := m.names()
 	switch m.OS {
 	case "darwin":
 		return []string{filepath.Join(m.Home, "Library", "LaunchAgents", label+".plist")}, nil
@@ -96,9 +97,13 @@ func (m Manager) files() ([]string, error) {
 		dir := filepath.Join(m.ConfigHome, "systemd", "user")
 		return []string{filepath.Join(dir, service), filepath.Join(dir, timer)}, nil
 	default:
-		return nil, fmt.Errorf("learning scheduling requires macOS launchd or Linux with a systemd user manager")
+		return nil, fmt.Errorf("scheduling requires macOS launchd or Linux with a systemd user manager")
 	}
 }
+func (m Manager) names() (string, string, string) {
+	return "com.trailmix." + m.Task, "trailmix-" + m.Task + ".service", "trailmix-" + m.Task + ".timer"
+}
+
 func (m Manager) Render(interval time.Duration) (map[string][]byte, error) {
 	paths, err := m.files()
 	if err != nil {
@@ -110,22 +115,36 @@ func (m Manager) Render(interval time.Duration) (map[string][]byte, error) {
 	if !filepath.IsAbs(m.Executable) || !filepath.IsAbs(m.ConfigPath) {
 		return nil, fmt.Errorf("scheduler executable and config paths must be absolute")
 	}
+	label, service, _ := m.names()
+	args := []string{m.Executable, "--config", m.ConfigPath}
+	if m.Task == "sync" {
+		args = append(args, "sync", "--background")
+	} else {
+		args = append(args, "learning", "run")
+	}
 	files := map[string][]byte{}
 	seconds := int64(interval / time.Second)
 	if m.OS == "darwin" {
+		var arguments strings.Builder
+		for _, arg := range args {
+			arguments.WriteString("<string>" + text(arg) + "</string>")
+		}
 		files[paths[0]] = []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>%s</string>
-<key>ProgramArguments</key><array><string>%s</string><string>--config</string><string>%s</string><string>learning</string><string>run</string></array>
+<key>ProgramArguments</key><array>%s</array>
 <key>StartInterval</key><integer>%d</integer><key>RunAtLoad</key><true/>
 <key>ProcessType</key><string>Background</string>
 <key>EnvironmentVariables</key><dict><key>HOME</key><string>%s</string><key>PATH</key><string>%s</string></dict>
 </dict></plist>
-`, label, text(m.Executable), text(m.ConfigPath), seconds, text(m.Home), text(m.Path)))
+`, label, arguments.String(), seconds, text(m.Home), text(m.Path)))
 	} else {
-		files[paths[0]] = []byte("[Unit]\nDescription=Review Trailmix learning evidence\n\n[Service]\nType=oneshot\nExecStart=" + argument(m.Executable) + " --config " + argument(m.ConfigPath) + " learning run\nEnvironment=" + environmentArgument("PATH="+m.Path) + "\nUMask=0077\nTimeoutStartSec=3700\nKillMode=control-group\n")
-		files[paths[1]] = []byte(fmt.Sprintf("[Unit]\nDescription=Schedule Trailmix learning\n\n[Timer]\nOnActiveSec=60s\nOnUnitInactiveSec=%ds\nUnit=%s\n\n[Install]\nWantedBy=timers.target\n", seconds, service))
+		for i := range args {
+			args[i] = argument(args[i])
+		}
+		files[paths[0]] = []byte("[Unit]\nDescription=Trailmix " + m.Task + "\n\n[Service]\nType=oneshot\nExecStart=" + strings.Join(args, " ") + "\nEnvironment=" + environmentArgument("PATH="+m.Path) + "\nUMask=0077\nTimeoutStartSec=3700\nKillMode=control-group\n")
+		files[paths[1]] = []byte(fmt.Sprintf("[Unit]\nDescription=Schedule Trailmix %s\n\n[Timer]\nOnActiveSec=60s\nOnUnitInactiveSec=%ds\nUnit=%s\n\n[Install]\nWantedBy=timers.target\n", m.Task, seconds, service))
 	}
 	return files, nil
 }
@@ -169,13 +188,14 @@ func (m Manager) lock() (func(), error) {
 	if err := os.MkdirAll(m.ConfigHome, 0700); err != nil {
 		return nil, err
 	}
-	lock := flock.New(filepath.Join(m.ConfigHome, ".trailmix-learning-schedule.lock"))
+	lock := flock.New(filepath.Join(m.ConfigHome, ".trailmix-"+m.Task+"-schedule.lock"))
 	if err := lock.Lock(); err != nil {
 		return nil, err
 	}
 	return func() { _ = lock.Unlock() }, nil
 }
 func (m Manager) Enable(interval time.Duration) error {
+	label, _, timer := m.names()
 	for _, part := range strings.Split(filepath.ToSlash(m.Executable), "/") {
 		if strings.HasPrefix(part, "go-build") {
 			return fmt.Errorf("install tmix at a stable path before scheduling; go run executables are temporary")
@@ -253,11 +273,12 @@ func (m Manager) Enable(interval time.Duration) error {
 	}
 	if err != nil {
 		rollback()
-		return fmt.Errorf("install learning scheduler: %w", err)
+		return fmt.Errorf("install %s scheduler: %w", m.Task, err)
 	}
 	return nil
 }
 func (m Manager) Disable() error {
+	label, service, timer := m.names()
 	paths, err := m.files()
 	if err != nil {
 		return err
@@ -303,6 +324,7 @@ func (m Manager) Disable() error {
 	return nil
 }
 func (m Manager) Status() Status {
+	label, _, timer := m.names()
 	s := Status{Platform: m.OS}
 	paths, err := m.files()
 	if err != nil {

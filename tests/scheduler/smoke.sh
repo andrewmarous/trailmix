@@ -20,13 +20,13 @@ esac
 if [ -e "$scheduler_file" ]; then echo "Refusing to replace $scheduler_file" >&2; exit 1; fi
 mkdir -p "$work/install with spaces/bin" "$work/vault"
 install -m 755 "$TMIX_TEST_BINARY" "$work/install with spaces/bin/tmix"
-tmix="$work/install with spaces/bin/tmix"
+tmix=("$work/install with spaces/bin/tmix" --config "$work/config.toml")
+printf '[vault]\npath = "%s"\n[sync]\nremote = "%s"\n' "$work/vault" "$remote_name" > "$work/config.toml"
 enabled=0
 cleanup() {
   result=$?
   trap - EXIT
-  if [ "$enabled" = 1 ]; then "$tmix" --vault "$work/vault" sync --disable || result=1; fi
-  "$tmix" remote remove "$remote_name" || true
+  if [ "$enabled" = 1 ]; then "${tmix[@]}" sync --disable || result=1; fi
   if [ "$result" != 0 ]; then
     cat "$HOME/Library/Logs/Trailmix/sync.log" 2>/dev/null || true
     cat "${XDG_STATE_HOME:-$HOME/.local/state}/trailmix/sync.log" 2>/dev/null || true
@@ -35,17 +35,17 @@ cleanup() {
   exit "$result"
 }
 trap cleanup EXIT
-"$tmix" --help >/dev/null
+"${tmix[@]}" --help >/dev/null
 git init --bare "$work/remote.git"
 git -C "$work/vault" init --initial-branch=main
 git -C "$work/vault" config user.name 'Scheduler Test'
 git -C "$work/vault" config user.email scheduler@example.invalid
 git -C "$work/vault" config commit.gpgsign false
 printf '# Scheduled memory\n' > "$work/vault/note.md"
-"$tmix" remote add "$remote_name" "$work/remote.git"
+"${tmix[@]}" remote add "$remote_name" "$work/remote.git"
 # Set cleanup before enable, to clean up even a partially failed installation.
 enabled=1
-"$tmix" --vault "$work/vault" sync --enable "$remote_name"
+"${tmix[@]}" sync --enable
 test -f "$scheduler_file"
 case "$(uname -s)" in
   Darwin) plutil -lint "$scheduler_file"; launchctl print "gui/$(id -u)/com.trailmix.sync" >/dev/null ;;
@@ -59,7 +59,7 @@ for attempt in $(seq 1 90); do
 done
 git --git-dir="$work/remote.git" show main:note.md | cmp "$work/vault/note.md" -
 test -f "$work/vault/.tmx-last-sync"
-"$tmix" --vault "$work/vault" sync --disable
+"${tmix[@]}" sync --disable
 enabled=0
 test ! -e "$scheduler_file"
 case "$(uname -s)" in
