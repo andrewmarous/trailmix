@@ -399,6 +399,8 @@ Search, links, and backups do not provide a consistent snapshot across notes. Ne
 Edit `guide/operating-guide.md` to change the operating instructions. Then run `make docs`.
 This command updates the README, `AGENTS.md`, and `skills/trailmix/SKILL.md` from that source.
 `make docs-check` rejects stale copies. `make test` includes this check.
+The generator preserves handwritten contributor instructions outside the marked block in `AGENTS.md`.
+Repository-local engineering skills live in `.agents/skills/`, separate from the distributed product skill.
 
 `tmix instructions` prints the same guide from the executable without reading files from the vault.
 Rebuild the executable after changes to the guide.
