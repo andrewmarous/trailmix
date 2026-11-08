@@ -22,7 +22,7 @@ func systemctl(args ...string) error {
 	return nil
 }
 
-func scheduleSystemd(root, remote string, enable bool) error {
+func scheduleSystemd(root, remote string, enable bool, appConfig ...string) error {
 	config, err := os.UserConfigDir()
 	if err != nil {
 		return err
@@ -54,7 +54,11 @@ func scheduleSystemd(root, remote string, enable bool) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	content := "[Unit]\nDescription=Sync Trailmix memory\n\n[Service]\nType=oneshot\nExecStart=" + systemdArg(exe) + " --vault " + systemdArg(root) + " sync --background " + systemdArg(remote) + "\nTimeoutStartSec=10min\n"
+	configArg := ""
+	if len(appConfig) > 0 && appConfig[0] != "" {
+		configArg = " --config " + systemdArg(appConfig[0])
+	}
+	content := "[Unit]\nDescription=Sync Trailmix memory\n\n[Service]\nType=oneshot\nExecStart=" + systemdArg(exe) + configArg + " --vault " + systemdArg(root) + " sync --background " + systemdArg(remote) + "\nTimeoutStartSec=10min\n"
 	if err := os.WriteFile(service, []byte(content), 0600); err != nil {
 		return err
 	}

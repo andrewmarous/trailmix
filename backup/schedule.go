@@ -34,7 +34,7 @@ func (g Git) Schedule(root, remote string, enable bool) error {
 		}
 	}
 	if runtime.GOOS == "linux" {
-		return scheduleSystemd(root, remote, enable)
+		return scheduleSystemd(root, remote, enable, g.AppConfig)
 	}
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("automatic scheduling requires macOS or Linux with a systemd user session")
@@ -64,15 +64,19 @@ func (g Git) Schedule(root, remote string, enable bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
+	configArgs := ""
+	if g.AppConfig != "" {
+		configArgs = "<string>--config</string><string>" + xmlText(g.AppConfig) + "</string>"
+	}
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>%s</string>
-<key>ProgramArguments</key><array><string>%s</string><string>--vault</string><string>%s</string><string>sync</string><string>--background</string><string>%s</string></array>
+<key>ProgramArguments</key><array><string>%s</string>%s<string>--vault</string><string>%s</string><string>sync</string><string>--background</string><string>%s</string></array>
 <key>StartInterval</key><integer>300</integer><key>RunAtLoad</key><true/>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 </dict></plist>
-`, label, xmlText(exe), xmlText(root), xmlText(remote))
+`, label, xmlText(exe), configArgs, xmlText(root), xmlText(remote))
 	if err := os.WriteFile(path, []byte(plist), 0600); err != nil {
 		return err
 	}

@@ -2,6 +2,9 @@ module github.com/andrewmarous/trailmix
 
 go 1.24
 
-require github.com/gofrs/flock v0.12.1
+require (
+	github.com/gofrs/flock v0.12.1
+	github.com/pelletier/go-toml/v2 v2.2.4
+)
 
 require golang.org/x/sys v0.22.0 // indirect

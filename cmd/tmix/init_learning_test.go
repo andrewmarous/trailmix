@@ -15,6 +15,7 @@ import (
 func TestInitOwnsMachineLearningCutoff(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	invoke := func(args ...string) (string, error) {
 		var out bytes.Buffer
 		err := run(args, strings.NewReader(""), &out, &out)
@@ -78,6 +79,7 @@ func TestInitOwnsMachineLearningCutoff(t *testing.T) {
 func TestInitCustomLearningState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	state := filepath.Join(home, "custom-state")
 	var out bytes.Buffer
 	if err := run([]string{"--vault", filepath.Join(home, "vault"), "init", "--learning-state-dir", state}, strings.NewReader(""), &out, &out); err != nil {

@@ -43,11 +43,12 @@ type Range struct {
 	Digest      string `json:"digest"`
 }
 type Run struct {
-	ID        string  `json:"id"`
-	Started   string  `json:"started"`
-	Completed string  `json:"completed,omitempty"`
-	Outcome   string  `json:"outcome,omitempty"`
-	Ranges    []Range `json:"ranges"`
+	WorkerVault string  `json:"worker_vault,omitempty"`
+	ID          string  `json:"id"`
+	Started     string  `json:"started"`
+	Completed   string  `json:"completed,omitempty"`
+	Outcome     string  `json:"outcome,omitempty"`
+	Ranges      []Range `json:"ranges"`
 }
 type Registry struct {
 	Version         int       `json:"version"`

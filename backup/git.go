@@ -18,8 +18,11 @@ import (
 var errNoContent = errors.New("vault has no committed content to back up")
 
 type Git struct {
-	Config   string
-	Out, Err io.Writer
+	Remotes     map[string]string
+	SaveRemotes func(map[string]string) error
+	AppConfig   string
+	Config      string
+	Out, Err    io.Writer
 }
 
 func (g Git) command(dir string, args ...string) ([]byte, error) {
@@ -59,6 +62,18 @@ func validURL(url string) error {
 }
 func (g Git) load() (map[string]string, error) {
 	result := map[string]string{}
+	if g.Remotes != nil {
+		for name, url := range g.Remotes {
+			if err := validName(name); err != nil {
+				return nil, err
+			}
+			if err := validURL(url); err != nil {
+				return nil, err
+			}
+			result[name] = url
+		}
+		return result, nil
+	}
 	data, err := os.ReadFile(g.Config)
 	if os.IsNotExist(err) {
 		return result, nil
@@ -135,6 +150,27 @@ func (g Git) Remote(args []string) error {
 	if op == "get-url" {
 		_, err := fmt.Fprintln(g.Out, remotes[name])
 		return err
+	}
+	if g.SaveRemotes != nil {
+		switch op {
+		case "add", "set-url":
+			if err := validURL(args[2]); err != nil {
+				return err
+			}
+			remotes[name] = args[2]
+		case "remove", "rm":
+			delete(remotes, name)
+		case "rename":
+			if err := validName(args[2]); err != nil {
+				return err
+			}
+			if _, ok := remotes[args[2]]; ok {
+				return fmt.Errorf("remote %q already exists", args[2])
+			}
+			remotes[args[2]] = remotes[name]
+			delete(remotes, name)
+		}
+		return g.SaveRemotes(remotes)
 	}
 	if err := os.MkdirAll(filepath.Dir(g.Config), 0700); err != nil {
 		return err

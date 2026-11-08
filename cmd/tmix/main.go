@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/andrewmarous/trailmix/backup"
+	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/guide"
 	"github.com/andrewmarous/trailmix/learning"
 	"github.com/andrewmarous/trailmix/vault"
@@ -23,13 +24,19 @@ var (
 	date    = "unknown"
 )
 
-const usage = `Usage: tmix [--vault PATH] COMMAND [options] [note/query]
+const usage = `Usage: tmix [--config PATH] [--vault PATH] COMMAND [options] [note/query]
 Run tmix instructions for when to search, how to search, what to preserve,
 and how to correct shared memory. Write only on explicit user request.
 Commands:
   learning [--vault PATH] status | record SESSION | begin | complete RUN | abort RUN
                                 Track evidence and learning review snapshots (JSON)
   learning sessions help        Discover Pi/Codex sessions and track reviewed turns
+  learning run                  Run a bounded learning pass with Pi or Codex
+  learning doctor [--probe]     Check readiness; --probe makes a real model request
+  learning accept RUN           Publish a queued proposal and complete its review
+  learning schedule enable|disable|status
+                                Manage macOS launchd or Linux systemd learning jobs
+  config init|path|show          Create or inspect shared TOML settings
   instructions                  Print the operating guide
   init    [--install-obsidian] [--learning-state-dir PATH]
                                 Create the vault and initialize the learning cutoff
@@ -64,6 +71,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	global := flag.NewFlagSet("tmix", flag.ContinueOnError)
 	global.SetOutput(diagnostics)
 	root := global.String("vault", filepath.Join(home, ".trailmix"), "vault directory")
+	configPath := global.String("config", config.Path(home), "shared TOML config file")
 	if err := global.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			fmt.Fprint(out, usage)
@@ -77,6 +85,26 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return nil
 	}
 	command := args[0]
+	*configPath, err = filepath.Abs(config.Expand(*configPath, home))
+	if err != nil {
+		return err
+	}
+	if command == "config" {
+		return runConfig(args[1:], *configPath, out)
+	}
+	cfg, err := config.Load(*configPath, home)
+	if err != nil {
+		return err
+	}
+	vaultOverride := false
+	global.Visit(func(f *flag.Flag) {
+		if f.Name == "vault" {
+			vaultOverride = true
+		}
+	})
+	if !vaultOverride {
+		*root = cfg.Vault.Path
+	}
 	if command == "instructions" {
 		if len(args) != 1 {
 			return fmt.Errorf("instructions takes no arguments")
@@ -85,7 +113,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	if command == "learning" {
-		return runLearning(args[1:], *root, in, out, diagnostics)
+		return runLearning(args[1:], *root, cfg, *configPath, in, out, diagnostics)
 	}
 	switch command {
 	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
@@ -96,7 +124,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	flags.SetOutput(diagnostics)
 	flags.StringVar(root, "vault", *root, "vault directory")
 	var overwrite, install, jsonOutput bool
-	learningStateDir := learning.DefaultStateDir(home)
+	learningStateDir := cfg.Learning.StateDir
 	var enableSync, disableSync, backgroundSync, syncStatus bool
 	limit := 10
 	switch command {
@@ -168,11 +196,28 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		if err != nil {
 			return err
 		}
-		g := backup.Git{Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Out: out, Err: diagnostics}
+		if cfg.Remotes == nil && *configPath != filepath.Clean(config.Path(home)) {
+			cfg.Remotes = map[string]string{}
+		}
+		g := backup.Git{Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Remotes: cfg.Remotes, SaveRemotes: func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes) }, AppConfig: *configPath, Out: out, Err: diagnostics}
 		if command == "remote" {
+			unlock, err := config.Lock(*configPath)
+			if err != nil {
+				return err
+			}
+			defer unlock()
+			latest, err := config.Load(*configPath, home)
+			if err != nil {
+				return err
+			}
+			g.Remotes = latest.Remotes
+			if g.Remotes == nil && *configPath != filepath.Clean(config.Path(home)) {
+				g.Remotes = map[string]string{}
+			}
+			g.SaveRemotes = func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes, true) }
 			return g.Remote(positional)
 		}
-		remote := "origin"
+		remote := cfg.Sync.Remote
 		if len(positional) == 1 {
 			remote = positional[0]
 		}
@@ -215,6 +260,11 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		}
 		return g.Backup(v.Root, remote)
 	case "init":
+		if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+			if err = config.Create(*configPath); err != nil {
+				return err
+			}
+		}
 		if err := v.Init(); err != nil {
 			return err
 		}

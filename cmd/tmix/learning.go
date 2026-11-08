@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/andrewmarous/trailmix/backup"
+	"github.com/andrewmarous/trailmix/config"
 )
 
 // The ledger is separate from searchable notes. Sessions are immutable evidence
@@ -33,11 +34,15 @@ type learningLedger struct {
 	Runs     []learningRun     `json:"runs"`
 }
 
-func runLearning(args []string, root string, in io.Reader, out, diagnostics io.Writer) error {
+func runLearning(args []string, root string, cfg config.Config, configPath string, in io.Reader, out, diagnostics io.Writer) error {
 	flags := flag.NewFlagSet("learning", flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
 	flags.StringVar(&root, "vault", root, "vault directory")
 	if err := flags.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			_, err = io.WriteString(out, usage)
+			return err
+		}
 		return err
 	}
 	args = flags.Args()
@@ -45,8 +50,15 @@ func runLearning(args []string, root string, in io.Reader, out, diagnostics io.W
 		return fmt.Errorf("usage: tmix learning [--vault PATH] status | record SESSION | begin | complete RUN | abort RUN | sessions help")
 	}
 	action := args[0]
+	if action == "help" {
+		_, err := io.WriteString(out, usage)
+		return err
+	}
+	if action == "run" || action == "doctor" || action == "schedule" || action == "accept" {
+		return runAutomation(args, root, cfg, configPath, out, diagnostics)
+	}
 	if action == "sessions" {
-		return runSessions(args[1:], in, out, diagnostics)
+		return runSessions(append([]string{"--state-dir", cfg.Learning.StateDir}, args[1:]...), in, out, diagnostics, cfg.Learning.Sources)
 	}
 	want := 1
 	if action == "record" || action == "complete" || action == "abort" {

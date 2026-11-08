@@ -1,4 +1,14 @@
-# Trailmix v0.1.0
+# Changelog
+
+## Unreleased
+
+- Add shared TOML settings for the vault, learning worker, sources, sync remote, and named remotes.
+- Add bounded Pi and Codex learning adapters, queued proposals, and opt-in automatic publication.
+- Add hourly learning-job installation through macOS launchd and Linux systemd user timers.
+- Add readiness checks, worker status, publication conflict checks, and interrupted-job recovery.
+- Retain legacy remote configuration until an explicit remote edit migrates it into TOML.
+
+## Trailmix v0.1.0
 
 First public release.
 

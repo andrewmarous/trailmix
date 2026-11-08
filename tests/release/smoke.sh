@@ -6,6 +6,7 @@ expected="${2:?version required}"
 vault="$(mktemp -d)"
 state="$(mktemp -d)"
 trap 'rm -rf "$vault" "$state"' EXIT
+export XDG_CONFIG_HOME="$state/config"
 "$binary" --vault "$vault" init --learning-state-dir "$state"
 cutoff="$("$binary" learning sessions --state-dir "$state" config)"
 "$binary" --vault "$vault" init --learning-state-dir "$state" > /dev/null

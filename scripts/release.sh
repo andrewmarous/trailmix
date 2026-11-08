@@ -18,8 +18,8 @@ for os in darwin linux; do
       -ldflags "-s -w -X main.version=$tag -X main.commit=$commit -X main.date=$date" \
       -o "$stage/tmix" ./cmd/tmix
     cp LICENSE README.md "$stage/"
-    cp -R skills "$stage/"
-    tar -czf "dist/$name.tar.gz" -C "$stage" tmix LICENSE README.md skills
+    cp -R skills docs "$stage/"
+    tar -czf "dist/$name.tar.gz" -C "$stage" tmix LICENSE README.md skills docs
     rm -rf "$stage"
   done
 done

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/learning"
 )
 
@@ -33,7 +34,7 @@ Source overrides persist after scan/begin. All output is JSON.
 This command tracks review progress; it does not run a model or publish notes.
 `
 
-func runSessions(args []string, in io.Reader, out, diagnostics io.Writer) error {
+func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, configured config.Sources) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -109,7 +110,10 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer) error 
 			r.Sources = learning.DefaultSources(home)
 		}
 		if action == "scan" || action == "begin" {
-			sources := r.Sources
+			sources := learning.ConfiguredSources(home, configured, r.Sources)
+			if sources == nil {
+				sources = r.Sources
+			}
 			if len(overrides) > 0 {
 				persisted := map[string]learning.Source{}
 				for _, s := range sources {
