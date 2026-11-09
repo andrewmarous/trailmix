@@ -136,9 +136,10 @@ func runAutomation(args []string, root string, c config.Config, configPath strin
 			return fmt.Errorf("unknown schedule action %q", args[1])
 		}
 		return json.NewEncoder(out).Encode(struct {
-			Scheduler schedule.Status    `json:"scheduler"`
-			LastJob   learning.JobStatus `json:"last_job"`
-		}{m.Status(), learning.LoadJobStatus(c.Learning.StateDir)})
+			Scheduler   schedule.Status    `json:"scheduler"`
+			LastJob     learning.JobStatus `json:"last_job"`
+			LastFailure learning.JobStatus `json:"last_failure"`
+		}{m.Status(), learning.LoadJobStatus(c.Learning.StateDir), learning.LoadFailureStatus(c.Learning.StateDir)})
 	}
 	return fmt.Errorf("unknown learning automation command")
 }

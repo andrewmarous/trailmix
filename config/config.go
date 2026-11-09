@@ -170,6 +170,7 @@ executable = ""
 model = "" # Empty uses the harness default.
 publication = ""
 state_dir = "~/.local/state/trailmix/learning"
+# Limits apply to each batch. Automatic invocations drain all captured work.
 timeout = "20m"
 max_turns = 20
 max_input_bytes = 2097152

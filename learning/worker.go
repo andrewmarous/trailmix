@@ -20,14 +20,21 @@ import (
 )
 
 type JobStatus struct {
-	Started        string `json:"started"`
-	Finished       string `json:"finished,omitempty"`
-	LastSuccess    string `json:"last_success,omitempty"`
-	Status         string `json:"status"`
-	RunID          string `json:"run_id,omitempty"`
-	ProposalPath   string `json:"proposal_path,omitempty"`
-	Error          string `json:"error,omitempty"`
-	CoverageErrors int    `json:"coverage_errors"`
+	Started           string  `json:"started"`
+	Finished          string  `json:"finished,omitempty"`
+	LastSuccess       string  `json:"last_success,omitempty"`
+	Status            string  `json:"status"`
+	RunID             string  `json:"run_id,omitempty"`
+	ProposalPath      string  `json:"proposal_path,omitempty"`
+	Error             string  `json:"error,omitempty"`
+	CoverageErrors    int     `json:"coverage_errors"`
+	SessionsTargeted  int     `json:"sessions_targeted"`
+	SessionsCompleted int     `json:"sessions_completed"`
+	BatchRanges       []Range `json:"batch_ranges,omitempty"`
+	TurnsTargeted     int     `json:"turns_targeted"`
+	TurnsCompleted    int     `json:"turns_completed"`
+	BatchesCompleted  int     `json:"batches_completed"`
+	TurnsRemaining    int     `json:"turns_remaining"`
 }
 type Proposal struct {
 	RunID    string            `json:"run_id"`
@@ -73,10 +80,26 @@ func writeJSON(path string, value any) error {
 	return os.Rename(f.Name(), path)
 }
 func LoadJobStatus(dir string) JobStatus {
+	return loadJobStatus(dir, "last_job.json")
+}
+
+// LoadFailureStatus retains the last failed invocation across later successes.
+func LoadFailureStatus(dir string) JobStatus {
+	return loadJobStatus(dir, "last_failure.json")
+}
+
+func loadJobStatus(dir, name string) JobStatus {
 	var s JobStatus
-	b, err := os.ReadFile(filepath.Join(dir, "last_job.json"))
+	path := filepath.Join(dir, name)
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return s
+	}
 	if err == nil {
-		_ = json.Unmarshal(b, &s)
+		err = json.Unmarshal(b, &s)
+	}
+	if err != nil {
+		return JobStatus{Status: "failed", Error: fmt.Sprintf("read learning report %s: %v", path, err)}
 	}
 	return s
 }
@@ -120,40 +143,6 @@ func ConfiguredSources(settings config.Sources) []Source {
 		}
 	}
 	return sources
-}
-func (v *Registry) beginWorker(root string, limit int) (*Run, error) {
-	for _, s := range v.Sessions {
-		if s.Error != "" || s.PendingTurns == 0 {
-			continue
-		}
-		run, err := v.Begin(s.ID)
-		if err != nil {
-			return nil, err
-		}
-		kept := []Range{}
-		left := limit
-		for _, item := range run.Ranges {
-			if left == 0 {
-				break
-			}
-			size := item.ThroughTurn - item.FromTurn + 1
-			if size > left {
-				item.ThroughTurn = item.FromTurn + left - 1
-				t, err := parse(s.Path, s.Harness)
-				if err != nil {
-					return nil, err
-				}
-				item.Digest = digest(t.Turns[:item.ThroughTurn])
-				size = left
-			}
-			kept = append(kept, item)
-			left -= size
-		}
-		run.Ranges = kept
-		run.WorkerVault = root
-		return run, nil
-	}
-	return nil, nil
 }
 func collectNotes(root string, limit int) (map[string]string, error) {
 	v, err := vault.Open(root)
@@ -258,9 +247,6 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		return status, fmt.Errorf("learning workers support macOS and Linux only")
 	}
-	if err = c.ValidateLearning(); err != nil {
-		return status, err
-	}
 	store := Store{Dir: c.Learning.StateDir}
 	if err = store.Transaction(func(r *Registry) error { _, e := r.requireCutoff(); return e }); err != nil {
 		return status, err
@@ -291,13 +277,20 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 		} else if status.Status == "completed" || status.Status == "no_work" {
 			status.LastSuccess = status.Finished
 		}
+		status.TurnsRemaining = status.TurnsTargeted - status.TurnsCompleted
+		if err != nil {
+			if e := writeJSON(filepath.Join(store.Dir, "last_failure.json"), status); e != nil {
+				err = fmt.Errorf("%w; save failure report: %v", err, e)
+				status.Error = err.Error()
+			}
+		}
 		if e := writeJSON(filepath.Join(store.Dir, "last_job.json"), status); err == nil && e != nil {
 			err = e
 		}
 	}()
-	duration, _ := time.ParseDuration(c.Learning.Timeout)
-	ctx, cancel := context.WithTimeout(ctx, duration)
-	defer cancel()
+	if err = c.ValidateLearning(); err != nil {
+		return status, err
+	}
 	var packets []Packet
 	err = store.Transaction(func(r *Registry) error {
 		if active := r.active(); active != nil {
@@ -320,90 +313,174 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 				return e
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return status, err
+	}
+	if status.Status == "manual_review_active" {
+		return status, nil
+	}
+	var work []Range
+	coverageProblem := ""
+	targets := map[string]int{}
+	completed := map[string]int{}
+	err = store.Transaction(func(r *Registry) error {
 		if e := r.Scan(ConfiguredSources(c.Learning.Sources)); e != nil {
 			return e
 		}
 		for _, s := range r.Sources {
 			if s.Status != "ok" {
 				status.CoverageErrors++
+				if coverageProblem == "" && len(s.Errors) > 0 {
+					coverageProblem = s.Errors[0]
+				}
 			}
 		}
 		for _, s := range r.Sessions {
-			if s.Error != "" {
-				status.CoverageErrors++
+			if s.Error == "" {
+				continue
+			}
+			for _, source := range r.Sources {
+				rel, e := filepath.Rel(source.Root, s.Path)
+				if e == nil && source.Harness == s.Harness && filepath.IsLocal(rel) {
+					status.CoverageErrors++
+					if coverageProblem == "" {
+						coverageProblem = s.ID + ": " + s.Error
+					}
+					break
+				}
 			}
 		}
-		run, e := r.beginWorker(c.Vault.Path, c.Learning.MaxTurns)
-		if e != nil {
-			return e
+		before, _ := time.Parse(time.RFC3339Nano, status.Started)
+		var e error
+		work, e = r.captureWork(before)
+		for _, item := range work {
+			targets[item.SessionID] += item.ThroughTurn - item.FromTurn + 1
+			status.TurnsTargeted += item.ThroughTurn - item.FromTurn + 1
 		}
-		if run == nil {
-			status.Status = "no_work"
-			return nil
-		}
-		status.RunID = run.ID
-		packets, e = r.Read(run.ID)
+		status.SessionsTargeted = len(targets)
 		return e
 	})
 	if err != nil {
 		return status, err
 	}
-	if status.Status == "manual_review_active" || status.Status == "no_work" {
-		return status, nil
-	}
-	if status.Status != "recovering" {
-		// On failure leave the turn counts unchanged. A later worker safely aborts
-		// and retries this owned snapshot if no durable proposal exists.
+	for {
 		if err = ctx.Err(); err != nil {
 			return status, err
 		}
-		notes, e := collectNotes(c.Vault.Path, c.Learning.MaxInputBytes)
-		if e != nil {
-			return status, e
+		err = store.Transaction(func(r *Registry) error {
+			var run *Run
+			var e error
+			if status.Status == "recovering" {
+				run, e = r.run(status.RunID)
+			} else {
+				run, e = r.beginCaptured(c.Vault.Path, c.Learning.MaxTurns, work)
+			}
+			if e != nil {
+				return e
+			}
+			if run == nil {
+				return nil
+			}
+			status.RunID = run.ID
+			status.BatchRanges = run.Ranges
+			if status.Status != "recovering" {
+				status.ProposalPath = ""
+			}
+			packets, e = r.Read(run.ID)
+			return e
+		})
+		if err != nil {
+			return status, err
 		}
-		input, e := json.Marshal(struct {
+		if len(packets) == 0 {
+			if status.CoverageErrors > 0 {
+				return status, fmt.Errorf("learning coverage incomplete: %d source/session errors: %s; inspect tmix learning sessions status", status.CoverageErrors, coverageProblem)
+			}
+			if status.BatchesCompleted == 0 {
+				status.Status = "no_work"
+			} else {
+				status.Status = "completed"
+			}
+			return status, nil
+		}
+		status.TurnsRemaining = status.TurnsTargeted - status.TurnsCompleted
+		if err = writeJSON(filepath.Join(store.Dir, "last_job.json"), status); err != nil {
+			return status, err
+		}
+		if err = runBatch(ctx, c, &status, packets); err != nil {
+			return status, err
+		}
+		if status.Status == "awaiting_approval" {
+			return status, nil
+		}
+		status.BatchesCompleted++
+		for _, p := range packets {
+			n := p.ThroughTurn - p.FromTurn + 1
+			status.TurnsCompleted += n
+			completed[p.SessionID] += n
+			if completed[p.SessionID] == targets[p.SessionID] {
+				status.SessionsCompleted++
+			}
+		}
+		packets = nil
+		status.Status = "running"
+	}
+}
+
+func runBatch(ctx context.Context, c config.Config, status *JobStatus, packets []Packet) error {
+	store := Store{Dir: c.Learning.StateDir}
+	duration, _ := time.ParseDuration(c.Learning.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	if status.Status != "recovering" {
+		// Leave failed snapshots owned and unreviewed for recovery next time.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		notes, err := collectNotes(c.Vault.Path, c.Learning.MaxInputBytes)
+		if err != nil {
+			return err
+		}
+		input, err := json.Marshal(struct {
 			Packets []Packet          `json:"packets"`
 			Notes   map[string]string `json:"existing_notes"`
 		}{packets, notes})
-		if e != nil {
-			return status, e
+		if err != nil {
+			return err
 		}
 		if len(input) > c.Learning.MaxInputBytes {
-			return status, fmt.Errorf("review input exceeds learning.max_input_bytes; reduce max_turns or increase the input limit")
+			return fmt.Errorf("review input exceeds learning.max_input_bytes; reduce max_turns or increase the input limit")
 		}
-		result, e := invokeHarness(ctx, c, input)
-		if e != nil {
-			return status, e
+		result, err := invokeHarness(ctx, c, input)
+		if err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("learning batch interrupted (%v): %w", ctx.Err(), err)
+			}
+			return err
 		}
-		proposal, e := makeProposal(c, status.RunID, result, packets, notes)
-		if e != nil {
-			return status, e
+		proposal, err := makeProposal(c, status.RunID, result, packets, notes)
+		if err != nil {
+			return err
 		}
-		if e = writeJSON(proposalPath(store.Dir, status.RunID), proposal); e != nil {
-			return status, e
+		if err = writeJSON(proposalPath(store.Dir, status.RunID), proposal); err != nil {
+			return err
 		}
 	}
-	p, e := loadProposal(store.Dir, status.RunID)
-	if e != nil {
-		return status, e
+	p, err := loadProposal(store.Dir, status.RunID)
+	if err != nil {
+		return err
 	}
 	status.ProposalPath = proposalPath(store.Dir, status.RunID)
 	if p.Policy != "proposals" && p.Policy != "automatic" {
-		return status, fmt.Errorf("proposal has an invalid publication policy")
+		return fmt.Errorf("proposal has an invalid publication policy")
 	}
-	if p.Policy == "proposals" {
+	if p.Policy == "proposals" || c.Learning.Publication != "automatic" {
 		status.Status = "awaiting_approval"
-		return status, nil
+		return nil
 	}
-	if c.Learning.Publication != "automatic" {
-		status.Status = "awaiting_approval"
-		return status, nil
-	}
-	if err = ApplyProposal(c, status.RunID); err != nil {
-		return status, err
-	}
-	status.Status = "completed"
-	return status, nil
+	return ApplyProposal(c, status.RunID)
 }
 
 func ApplyProposal(c config.Config, id string) error {

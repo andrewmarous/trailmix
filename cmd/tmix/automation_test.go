@@ -23,6 +23,7 @@ func TestSharedConfigAndLearningCLI(t *testing.T) {
 	c.Learning.StateDir = filepath.Join(home, "configured-state")
 	c.Learning.Harness = "pi"
 	c.Learning.Publication = "proposals"
+	c.Learning.Sources = config.Sources{}
 	b, _ := toml.Marshal(c)
 	if err := os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)
@@ -53,6 +54,28 @@ func TestSharedConfigAndLearningCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result["status"] != "no_work" {
+		t.Fatal(out)
+	}
+	if err := os.WriteFile(filepath.Join(c.Learning.StateDir, "last_failure.json"), []byte(`{"status":"failed","error":"synthetic batch failure","turns_remaining":2}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err = invoke("learning", "schedule", "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var health struct {
+		LastJob struct {
+			Status string `json:"status"`
+		} `json:"last_job"`
+		LastFailure struct {
+			Error          string `json:"error"`
+			TurnsRemaining int    `json:"turns_remaining"`
+		} `json:"last_failure"`
+	}
+	if err := json.Unmarshal([]byte(out), &health); err != nil {
+		t.Fatal(err)
+	}
+	if health.LastJob.Status != "no_work" || health.LastFailure.Error != "synthetic batch failure" || health.LastFailure.TurnsRemaining != 2 {
 		t.Fatal(out)
 	}
 	if _, err = invoke("remote", "add", "origin", "git@example.com:notes.git"); err != nil {

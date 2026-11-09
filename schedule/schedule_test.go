@@ -51,6 +51,25 @@ func TestRenderBothSchedulers(t *testing.T) {
 		})
 	}
 }
+func TestLinuxLearningCanDrainBeyondOneHour(t *testing.T) {
+	for _, task := range []string{"learning", "sync"} {
+		m := manager(t, "linux")
+		m.Task = task
+		files, err := m.Render(time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(files[filepath.Join(m.ConfigHome, "systemd", "user", "trailmix-"+task+".service")])
+		want := "TimeoutStartSec=infinity\n"
+		if task == "sync" {
+			want = "TimeoutStartSec=3700\n"
+		}
+		if !strings.Contains(body, want) {
+			t.Fatalf("%s service has wrong deadline: %s", task, body)
+		}
+	}
+}
+
 func TestInstallUpdateDisableAndRollback(t *testing.T) {
 	for _, platform := range []string{"darwin", "linux"} {
 		t.Run(platform, func(t *testing.T) {

@@ -143,7 +143,12 @@ func (m Manager) Render(interval time.Duration) (map[string][]byte, error) {
 		for i := range args {
 			args[i] = argument(args[i])
 		}
-		files[paths[0]] = []byte("[Unit]\nDescription=Trailmix " + m.Task + "\n\n[Service]\nType=oneshot\nExecStart=" + strings.Join(args, " ") + "\nEnvironment=" + environmentArgument("PATH="+m.Path) + "\nUMask=0077\nTimeoutStartSec=3700\nKillMode=control-group\n")
+		timeout := "3700"
+		if m.Task == "learning" {
+			// Each model batch has its own timeout; draining has no total deadline.
+			timeout = "infinity"
+		}
+		files[paths[0]] = []byte("[Unit]\nDescription=Trailmix " + m.Task + "\n\n[Service]\nType=oneshot\nExecStart=" + strings.Join(args, " ") + "\nEnvironment=" + environmentArgument("PATH="+m.Path) + "\nUMask=0077\nTimeoutStartSec=" + timeout + "\nKillMode=control-group\n")
 		files[paths[1]] = []byte(fmt.Sprintf("[Unit]\nDescription=Schedule Trailmix %s\n\n[Timer]\nOnActiveSec=60s\nOnUnitInactiveSec=%ds\nUnit=%s\n\n[Install]\nWantedBy=timers.target\n", m.Task, seconds, service))
 	}
 	return files, nil

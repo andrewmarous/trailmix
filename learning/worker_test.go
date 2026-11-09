@@ -27,7 +27,7 @@ func workerFixture(t *testing.T, harness, policy string) (config.Config, string)
 		t.Fatal(err)
 	}
 	source := filepath.Join(home, "source")
-	timedPi(t, filepath.Join(source, "pi.jsonl"), "p", "2000-01-01T00:00:00Z", "2000-01-02T00:00:00Z")
+	timedPi(t, filepath.Join(source, "pi.jsonl"), "p", "2000-01-01T00:00:00Z")
 	c.Learning.Sources = config.Sources{Pi: source}
 	store := Store{Dir: c.Learning.StateDir}
 	if _, err := store.Initialize(); err != nil {
@@ -82,6 +82,30 @@ func assertReviewed(t *testing.T, c config.Config, count int) {
 func lessonResult() Result {
 	return Result{Summary: "Verified retry procedure.", Changes: []Change{{Path: "procedures/retry.md", Content: "# Retry transient failures\n\nRetry only verified transient failures.\n", Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}}}}}
 }
+func TestWorkerDrainsAllSessionsInBatches(t *testing.T) {
+	c, _ := workerFixture(t, "pi", "automatic")
+	timedPi(t, filepath.Join(c.Learning.Sources.Pi, "pi.jsonl"), "p", "2000-01-01T00:00:00Z", "2000-01-02T00:00:00Z")
+	timedPi(t, filepath.Join(c.Learning.Sources.Pi, "second.jsonl"), "second", "2000-01-03T00:00:00Z")
+	s, err := RunOnce(context.Background(), c)
+	if err != nil || s.Status != "completed" {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if s.SessionsTargeted != 2 || s.SessionsCompleted != 2 || s.TurnsTargeted != 3 || s.TurnsCompleted != 3 || s.BatchesCompleted != 3 || s.TurnsRemaining != 0 {
+		t.Fatalf("wrong invocation report: %+v", s)
+	}
+	if err := (Store{Dir: c.Learning.StateDir}).Transaction(func(r *Registry) error {
+		if len(r.Sessions) != 2 || r.Sessions[0].ReviewedTurns != 2 || r.Sessions[1].ReviewedTurns != 1 {
+			t.Fatalf("did not drain all sessions: %+v", r.Sessions)
+		}
+		if len(r.Runs) != 3 {
+			t.Fatalf("expected three bounded batches, got %+v", r.Runs)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdaptersAndBoundedWorker(t *testing.T) {
 	for _, h := range []string{"pi", "codex"} {
 		t.Run(h, func(t *testing.T) {
@@ -89,14 +113,13 @@ func TestAdaptersAndBoundedWorker(t *testing.T) {
 			if err := Doctor(context.Background(), c); err != nil {
 				t.Fatal(err)
 			}
-			for i := 1; i <= 2; i++ {
-				s, err := RunOnce(context.Background(), c)
-				if err != nil || s.Status != "completed" {
-					t.Fatalf("%+v %v", s, err)
-				}
-				assertReviewed(t, c, i)
-			}
+			timedPi(t, filepath.Join(c.Learning.Sources.Pi, "pi.jsonl"), "p", "2000-01-01T00:00:00Z", "2000-01-02T00:00:00Z")
 			s, err := RunOnce(context.Background(), c)
+			if err != nil || s.Status != "completed" {
+				t.Fatalf("%+v %v", s, err)
+			}
+			assertReviewed(t, c, 2)
+			s, err = RunOnce(context.Background(), c)
 			if err != nil || s.Status != "no_work" {
 				t.Fatalf("%+v %v", s, err)
 			}
@@ -150,10 +173,11 @@ func TestRecoversDurablePartiallyPublishedResult(t *testing.T) {
 	var runID string
 	var packets []Packet
 	if err := (Store{Dir: c.Learning.StateDir}).Transaction(func(r *Registry) error {
-		run, err := r.beginWorker(c.Vault.Path, 1)
+		run, err := r.Begin("pi/p")
 		if err != nil {
 			return err
 		}
+		run.WorkerVault = c.Vault.Path
 		runID = run.ID
 		packets, err = r.Read(runID)
 		return err

@@ -115,6 +115,14 @@ Uninstallation does not remove `~/.trailmix`, remote backups, or user configurat
 
 Trailmix is one global, shared Markdown memory store. It is useful only when an agent knows when to search, how to search, what to preserve, and how to correct it.
 
+## Check learning health
+
+At the start of each interaction, run `tmix learning schedule status` to read the latest invocation and retained failure report.
+If `last_failure.status` is `failed`, tell the user its time, error, and remaining work.
+Use `last_job.last_success` to distinguish a historical failure from one without a later successful invocation.
+An empty failure status means no retained failure report exists.
+This check does not run a model or change the scheduler.
+
 ## When to search
 
 Search when prior decisions, preferences, procedures, or lessons can affect the current task.
@@ -257,7 +265,7 @@ The registry records the last scan's sources for diagnostics. It does not config
 
 1. Run `tmix learning doctor` to check configuration, initialization, and CLI compatibility.
 2. Run `tmix learning doctor --probe` to test a real model request; provider charges can apply.
-3. Run `tmix learning run` to process one session, up to `learning.max_turns` pending turns.
+3. Run `tmix learning run` to review all eligible pending sessions through the invocation's start time.
 4. Inspect its result before installing further unattended work.
 5. Run `tmix learning schedule enable` to install the current user's hourly job.
 
@@ -267,7 +275,11 @@ Codex retains model/provider settings but disables MCP, app, browser, and comput
 Treat the harness executable and its credential configuration as trusted software.
 Compatibility checks alone do not establish authentication. Scheduled jobs need credentials available outside the interactive shell.
 The worker validates structured results and pending-turn citations, not just exit codes.
-Input, output, turn count, and model runtime have limits. These are not a provider billing cap.
+Each model request has input, output, turn-count, and runtime limits. These are not a provider billing cap.
+`learning.max_turns` and `learning.timeout` apply separately to each batch, not the whole invocation.
+Automatic runs process batches sequentially until the captured workload is complete.
+New sessions and turns that arrive during processing wait for the next invocation.
+A larger backlog causes more model requests in one invocation.
 Oversized input fails without silently truncating evidence; adjust the configured limits before retrying.
 
 With `proposals`, inspect the reported private `proposal_path`, then run `tmix learning accept RUN` to publish and complete it.
@@ -278,12 +290,18 @@ With `automatic`, validated proposals publish without interactive approval. A su
 Publication checks note baselines and staged links. Conflicts leave progress unchanged rather than overwriting newer content.
 Durable proposals support retries after partial publication; multiple note writes are not a filesystem transaction.
 A separate worker lock prevents overlapping jobs. The registry lock is released during model execution.
-Failures leave turns unreviewed. Interrupted worker runs without a durable result retry later; manual active reviews require user resolution.
+A failed batch stops the invocation. Completed batches retain their progress, and unfinished turns remain eligible for retry.
+Coverage errors prevent a full-success result, even when all readable sessions complete.
+Interrupted worker runs without a durable result retry later. Manual active reviews require user resolution.
 
 macOS uses a launchd LaunchAgent; Linux uses a systemd user service and timer. Other platforms are unsupported.
 Linux requires a running user manager; logout persistence requires separately enabled user lingering.
-Run `tmix learning schedule status` for installed files, OS status, and the last worker result.
-The registry's `last_job.json` stores bounded status metadata, not raw transcripts or harness output.
+Run `tmix learning schedule status` for installed files, OS status, the latest invocation, and the retained failure report.
+The invocation report includes targeted and completed session/turn counts, completed batches, remaining turns, and the current batch's ranges.
+The registry stores these reports in `last_job.json` and `last_failure.json`, without raw transcripts or harness output.
+Successful runs replace `last_job.json` but preserve `last_failure.json`.
+A forced termination can leave `last_job.status` as `running` without a final failure report.
+Linux learning services have no total runtime limit. Re-enable existing Linux learning jobs after upgrading to install this change.
 Run `tmix learning schedule disable` to stop and uninstall the job while preserving notes and review state.
 Learning and sync use separate OS jobs with shared installation code. Neither job guarantees ordering relative to the other.
 Set `learning.schedule.interval` to change the default `1h`. Set `sync.schedule.interval` to change the default `5m`.

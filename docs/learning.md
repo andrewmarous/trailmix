@@ -81,7 +81,13 @@ Credentials stay with the harness. Avoid storing keys in TOML or generated servi
 Shell-only API keys are not captured by scheduler installation.
 Use harness credential storage or deliberately configure the user service environment.
 
-Each pass reviews at most one session and `max_turns` pending turns.
+Each invocation captures all eligible pending turns through its start time, across all configured sessions.
+Automatic mode drains that workload in sequential batches, with at most `max_turns` turns from one session per batch.
+The configured `timeout` applies separately to each batch.
+New sessions and turns wait for the next invocation.
+A batch failure stops processing without discarding successful batches or marking unfinished turns reviewed.
+Source and session errors prevent a full-success result.
+Proposal mode still pauses for approval after one batch.
 Evidence and existing notes are sent to the configured harness/provider; inspect sensitive source logs before enabling this.
 The worker includes existing notes to detect duplicates and corrections.
 Oversized input fails rather than silently dropping evidence or notes.
@@ -185,8 +191,15 @@ Temporary vault and remote overrides cannot configure scheduled jobs.
 Set `vault.path` and `sync.remote` in TOML instead.
 Both jobs read the TOML file on each invocation.
 
-Status includes installed files, OS job state, and the last worker result.
-The registry directory's `last_job.json` is overwritten with bounded status metadata, not raw harness output.
+Status includes installed files, OS job state, the latest invocation, and the retained failure report.
+Invocation reports include targeted/completed sessions and turns, completed batches, remaining turns, and the current batch's ranges.
+The registry directory stores bounded reports in `last_job.json` and `last_failure.json`, not raw harness output.
+Later successful runs preserve the last failure report.
+The updated agent skill checks this status at the start of each interaction and surfaces retained failures, including later successful invocations.
+Refresh copied agent skills after upgrading. Existing agent sessions need the updated operating guide.
+A forced termination can leave a stale `running` status without a final failure report.
+Linux learning services have no total runtime limit because each batch has its own timeout.
+Re-enable an existing Linux learning job after upgrading to install this service change.
 On Linux, inspect service diagnostics with `journalctl --user -u trailmix-learning.service`.
 On macOS, inspect `launchctl print gui/$(id -u)/com.trailmix.learning` for OS exit information.
 Disabling stops the job and removes its definitions while preserving notes and review state.
