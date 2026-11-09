@@ -86,7 +86,19 @@ The agent must find `decisions/retries.md`. Run `tmix instructions` to read the 
 ## Upgrade and uninstall
 
 For Homebrew, run `brew update` and then `brew upgrade trailmix`.
-For a manual installation, replace the executable at the same path with the new release executable.
+For a standalone release installation, run `tmix update` to install the latest stable release.
+Run `tmix update --check` to check for a release without changes.
+Older versions without this command require one manual executable replacement.
+Development builds require a rebuild or an official release installation.
+
+The updater supports macOS and Linux on AMD64 and ARM64. It leaves Homebrew and Nix installations under package-manager control.
+It downloads official GitHub assets with timeouts and size limits, verifies SHA-256 checksums, and checks the staged executable's version.
+It then replaces the executable atomically at its resolved path. A lock prevents concurrent replacements.
+The destination directory must be writable. The updater does not invoke `sudo`.
+
+Checksums detect corruption but do not authenticate a release independently of GitHub and HTTPS.
+Updates preserve vaults, configuration, learning progress, and scheduler settings. Existing jobs finish with the old executable.
+Agent skills remain unchanged. Refresh copied skills separately with the installation instructions.
 After an upgrade, run `tmix --version` and `tmix sync --status` if you use automatic sync.
 Before using session learning, rerun `tmix init` to initialize any missing machine-local cutoff.
 

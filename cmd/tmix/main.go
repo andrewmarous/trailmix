@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/andrewmarous/trailmix/backup"
 	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/guide"
+	"github.com/andrewmarous/trailmix/internal/update"
 	"github.com/andrewmarous/trailmix/learning"
 	"github.com/andrewmarous/trailmix/vault"
 )
@@ -37,6 +39,7 @@ Commands:
   learning schedule enable|disable|status
                                 Manage macOS launchd or Linux systemd learning jobs
   config init|path|show          Create or inspect shared TOML settings
+  update [--check]              Update standalone tmix or check the latest release
   instructions                  Print the operating guide
   init    [--install-obsidian] [--learning-state-dir PATH]
                                 Create the vault and initialize the learning cutoff
@@ -85,6 +88,21 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return nil
 	}
 	command := args[0]
+	if command == "update" {
+		flags := flag.NewFlagSet("update", flag.ContinueOnError)
+		flags.SetOutput(diagnostics)
+		check := flags.Bool("check", false, "check the latest stable release without changes")
+		if err := flags.Parse(args[1:]); err != nil {
+			if err == flag.ErrHelp {
+				return nil
+			}
+			return err
+		}
+		if flags.NArg() != 0 {
+			return fmt.Errorf("update takes no positional arguments")
+		}
+		return update.Run(context.Background(), version, *check, out)
+	}
 	*configPath, err = filepath.Abs(config.Expand(*configPath, home))
 	if err != nil {
 		return err
