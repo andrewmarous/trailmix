@@ -100,6 +100,27 @@ Both run from a temporary directory. Neither resumes your interactive session.
 Codex retains model/provider settings but disables MCP, app, browser, and computer tools for reviews.
 Treat the harness executable and its credential configuration as trusted software.
 
+## Navigation maps
+
+The worker maintains `navigation/index.md` and topic maps under `navigation/`.
+Navigation uses the same publication policy as lessons.
+It runs before learning and after each published lesson batch, even with no pending turns during initial construction.
+A failure leaves maintenance pending and stops later batches; completed lesson progress remains intact.
+
+Read the root with `tmix read navigation/index`, then follow relevant links or search.
+The root is limited to 4 KiB; topic pages are limited to 8 KiB.
+Maps describe the applicability of underlying notes rather than duplicating their rules.
+They are agent-maintained, including pre-existing material in `navigation/`.
+
+Use `tmix learning navigation build` for an explicit rebuild, including after manual note changes.
+This operation can incur provider charges and does not scan or review sessions.
+It reports a `navigation_id` and private `proposal_path` when a proposal is produced.
+Accept with `tmix learning accept NAVIGATION_ID`.
+To replace a rejected or conflicting proposal, run `tmix learning navigation discard NAVIGATION_ID`.
+The next invocation regenerates it from current notes; published pages are not deleted.
+Session completion and abort commands apply only to lesson proposals, not navigation.
+See `tmix instructions` for maintenance, input limits, and retry behavior.
+
 ## Manual guidance
 
 Save explicitly requested guidance without a model request or proposal file:
@@ -126,7 +147,7 @@ tmix learning accept RUN
 ```
 
 A proposal awaiting approval pauses later worker passes.
-To reject its changes and finish reviewing the evidence:
+For a session-learning proposal, reject its changes and finish reviewing the evidence:
 
 ```sh
 printf 'Rejected proposed changes; no notes published.\n' | tmix learning sessions complete RUN

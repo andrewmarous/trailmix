@@ -29,14 +29,15 @@ Learn verified, reusable technical procedures, corrections and lessons, not sess
 Compare with existing notes before proposing changes. Preserve evidence and limits; distinguish observed results from hypotheses and historic tests from current readiness.
 Exclude credentials, secrets and unnecessary personal information. Do not copy full transcripts.
 Each change must cite at least one pending session_id and absolute turn number.
-Provide the complete Markdown body for each changed note, with a descriptive title and concise evidence. Use safe vault-relative .md paths.
+Provide the complete Markdown body for each changed note, with a descriptive title and concise evidence. Use safe vault-relative .md paths outside navigation/; that namespace is maintained separately.
 Use exact vault-relative wiki links only when their targets exist or are also proposed.
 If nothing useful is supported, return an explanatory summary and an empty changes array.
 Do not modify files yourself. Trailmix validates and publishes the result.`
 
 type Evidence struct {
-	SessionID string `json:"session_id"`
-	Turn      int    `json:"turn"`
+	SessionID string `json:"session_id,omitempty"`
+	Turn      int    `json:"turn,omitempty"`
+	Note      string `json:"note,omitempty"`
 }
 type Change struct {
 	Path     string     `json:"path"`
@@ -155,6 +156,10 @@ func Probe(ctx context.Context, c config.Config) error {
 }
 
 func invokeHarness(ctx context.Context, c config.Config, prompt []byte) (Result, error) {
+	return invokeReview(ctx, c, prompt, reviewInstructions, resultSchema)
+}
+
+func invokeReview(ctx context.Context, c config.Config, prompt []byte, instructions, schemaText string) (Result, error) {
 	exe, err := harnessExecutable(c.Learning)
 	if err != nil {
 		return Result{}, err
@@ -164,11 +169,11 @@ func invokeHarness(ctx context.Context, c config.Config, prompt []byte) (Result,
 		return Result{}, err
 	}
 	defer os.RemoveAll(work)
-	args := []string{"--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-mcp", "--no-themes", "--no-approve", "--system-prompt", reviewInstructions}
+	args := []string{"--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-mcp", "--no-themes", "--no-approve", "--system-prompt", instructions}
 	output := filepath.Join(work, "result.json")
 	if c.Learning.Harness == "codex" {
 		schema := filepath.Join(work, "schema.json")
-		if err = os.WriteFile(schema, []byte(resultSchema), 0600); err != nil {
+		if err = os.WriteFile(schema, []byte(schemaText), 0600); err != nil {
 			return Result{}, err
 		}
 		args = []string{"exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "hooks", "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use", "--color", "never", "-c", "approval_policy=\"never\"", "-c", "project_doc_max_bytes=0", "-c", "mcp_servers={}", "-c", "web_search=\"disabled\"", "--output-schema", schema, "--output-last-message", output}
@@ -181,7 +186,7 @@ func invokeHarness(ctx context.Context, c config.Config, prompt []byte) (Result,
 	}
 	cmd := exec.CommandContext(ctx, exe, args...)
 	cmd.Dir = work
-	cmd.Stdin = bytes.NewReader(append([]byte(reviewInstructions+"\n\nReview input (JSON data):\n"), prompt...))
+	cmd.Stdin = bytes.NewReader(append([]byte(instructions+"\n\nReview input (JSON data):\n"), prompt...))
 	stdout := boundedOutput{limit: 1024 * 1024}
 	stderr := boundedOutput{limit: 64 * 1024}
 	cmd.Stdout = &stdout

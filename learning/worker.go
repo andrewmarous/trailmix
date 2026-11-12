@@ -20,6 +20,7 @@ import (
 )
 
 type JobStatus struct {
+	NavigationID      string  `json:"navigation_id,omitempty"`
 	Started           string  `json:"started"`
 	Finished          string  `json:"finished,omitempty"`
 	LastSuccess       string  `json:"last_success,omitempty"`
@@ -37,6 +38,8 @@ type JobStatus struct {
 	TurnsRemaining    int     `json:"turns_remaining"`
 }
 type Proposal struct {
+	Kind     string            `json:"kind,omitempty"`
+	Sources  map[string]string `json:"source_sha256,omitempty"`
 	RunID    string            `json:"run_id"`
 	Vault    string            `json:"vault"`
 	Policy   string            `json:"policy"`
@@ -207,10 +210,16 @@ func validateResult(r Result, packets []Packet) error {
 		return err
 	}
 	for _, change := range r.Changes {
+		if strings.HasPrefix(change.Path, "navigation/") {
+			return fmt.Errorf("session review cannot change navigation maps")
+		}
 		if len(change.Evidence) == 0 || len(change.Evidence) > 100 {
 			return fmt.Errorf("proposed note requires 1 to 100 pending-turn citations: %s", change.Path)
 		}
 		for _, e := range change.Evidence {
+			if e.Note != "" {
+				return fmt.Errorf("session review requires pending-turn evidence")
+			}
 			found := false
 			for _, p := range packets {
 				if e.SessionID == p.SessionID && e.Turn >= p.FromTurn && e.Turn <= p.ThroughTurn {
@@ -365,6 +374,16 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 	if err != nil {
 		return status, err
 	}
+	// Capture workload before any model call so reports include the turns held
+	// back by navigation. Recover interrupted lesson writes before mapping them.
+	if status.Status != "recovering" {
+		if err = maintainNavigation(ctx, c, &status, false); err != nil {
+			return status, err
+		}
+		if status.Status == "awaiting_approval" {
+			return status, nil
+		}
+	}
 	for {
 		if err = ctx.Err(); err != nil {
 			return status, err
@@ -426,6 +445,12 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 		}
 		packets = nil
 		status.Status = "running"
+		if err = maintainNavigation(ctx, c, &status, false); err != nil {
+			return status, err
+		}
+		if status.Status == "awaiting_approval" {
+			return status, nil
+		}
 	}
 }
 
@@ -492,11 +517,22 @@ func ApplyProposal(c config.Config, id string) error {
 	if p.Vault != c.Vault.Path {
 		return fmt.Errorf("proposal belongs to a different vault")
 	}
+	if p.Kind == "navigation" {
+		if err = checkNavigationDirectories(c); err != nil {
+			return err
+		}
+	}
 	unlock, err := backup.Lock(c.Vault.Path)
 	if err != nil {
 		return err
 	}
 	defer unlock()
+	if p.Kind == "navigation" {
+		return applyNavigation(c, p)
+	}
+	if p.Kind != "" {
+		return fmt.Errorf("unknown proposal kind %q", p.Kind)
+	}
 	return store.Transaction(func(r *Registry) error {
 		run, err := r.run(id)
 		if err != nil {
@@ -519,6 +555,9 @@ func ApplyProposal(c config.Config, id string) error {
 		// progress only after every write succeeds. Persisted proposals make partial
 		// publication retryable without running the model again.
 		if _, err = r.Close(id, p.Result.Summary, false); err != nil {
+			return err
+		}
+		if err = queueNavigation(c, p.Result.Changes); err != nil {
 			return err
 		}
 		return publishGuidance(c.Vault.Path, p.Result.Changes, p.Expected)

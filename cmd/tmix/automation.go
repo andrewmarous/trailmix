@@ -63,6 +63,21 @@ func runAutomation(args []string, root string, c config.Config, configPath strin
 			err = e
 		}
 		return err
+	case "navigation":
+		if len(args) == 2 && args[1] == "build" {
+			status, err := learning.BuildNavigation(ctx, c)
+			if e := json.NewEncoder(out).Encode(status); err == nil {
+				err = e
+			}
+			return err
+		}
+		if len(args) == 3 && args[1] == "discard" {
+			if err := learning.DiscardNavigation(c, args[2]); err != nil {
+				return err
+			}
+			return json.NewEncoder(out).Encode(map[string]string{"status": "navigation_pending", "run_id": args[2]})
+		}
+		return fmt.Errorf("usage: tmix learning navigation build | discard RUN")
 	case "doctor":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "--probe") {
 			return fmt.Errorf("usage: tmix learning doctor [--probe]")

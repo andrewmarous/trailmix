@@ -24,6 +24,10 @@ func TestSharedConfigAndLearningCLI(t *testing.T) {
 	c.Learning.Harness = "pi"
 	c.Learning.Publication = "proposals"
 	c.Learning.Sources = config.Sources{}
+	c.Learning.Executable = filepath.Join(home, "fake-pi")
+	if err := os.WriteFile(c.Learning.Executable, []byte("#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"summary\":\"Create discovery map.\",\"changes\":[{\"path\":\"navigation/index.md\",\"content\":\"# Memory map\\n\\nUse search for topics omitted here.\\n\",\"evidence\":[]}]}'\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	b, _ := toml.Marshal(c)
 	if err := os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)
@@ -53,8 +57,42 @@ func TestSharedConfigAndLearningCLI(t *testing.T) {
 	if err = json.Unmarshal([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
+	if result["status"] != "awaiting_approval" {
+		t.Fatal(out)
+	}
+	id, ok := result["navigation_id"].(string)
+	if !ok {
+		t.Fatal(out)
+	}
+	if _, err = invoke("learning", "accept", id); err != nil {
+		t.Fatal(err)
+	}
+	out, err = invoke("learning", "run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
 	if result["status"] != "no_work" {
 		t.Fatal(out)
+	}
+	if body, err := os.ReadFile(filepath.Join(c.Vault.Path, "navigation/index.md")); err != nil || string(body) != "# Memory map\n\nUse search for topics omitted here.\n" {
+		t.Fatalf("%s %v", body, err)
+	}
+	out, err = invoke("learning", "navigation", "build")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	id, ok = result["navigation_id"].(string)
+	if !ok {
+		t.Fatal(out)
+	}
+	if _, err = invoke("learning", "navigation", "discard", id); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(c.Learning.StateDir, "last_failure.json"), []byte(`{"status":"failed","error":"synthetic batch failure","turns_remaining":2}`), 0600); err != nil {
 		t.Fatal(err)

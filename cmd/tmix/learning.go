@@ -27,7 +27,7 @@ func runLearning(args []string, root string, cfg config.Config, configPath strin
 		return err
 	}
 	switch args[0] {
-	case "run", "doctor", "schedule", "accept":
+	case "run", "doctor", "schedule", "accept", "navigation":
 		return runAutomation(args, root, cfg, configPath, out, diagnostics)
 	case "sessions":
 		return runSessions(append([]string{"--state-dir", cfg.Learning.StateDir}, args[1:]...), in, out, diagnostics, cfg.Learning.Sources)

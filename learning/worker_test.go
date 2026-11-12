@@ -26,6 +26,12 @@ func workerFixture(t *testing.T, harness, policy string) (config.Config, string)
 	if err := v.Init(); err != nil {
 		t.Fatal(err)
 	}
+	if err := v.Write("navigation/index.md", []byte("# Memory map\n\nUse search to find relevant notes.\n"), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeJSON(navigationStatePath(c), navigationState{Vault: c.Vault.Path, Pending: []string{}}); err != nil {
+		t.Fatal(err)
+	}
 	source := filepath.Join(home, "source")
 	timedPi(t, filepath.Join(source, "pi.jsonl"), "p", "2000-01-01T00:00:00Z")
 	c.Learning.Sources = config.Sources{Pi: source}
@@ -53,7 +59,14 @@ while [ "$#" -gt 0 ]; do
  shift
 done
 cat > '` + filepath.Join(home, "input.json") + `'
-if [ -n "$output" ]; then cp '` + resultFile + `' "$output"; else cat '` + resultFile + `'; fi
+result='` + resultFile + `'
+if grep -q '"task":"navigation"' '` + filepath.Join(home, "input.json") + `'; then
+ result='` + filepath.Join(home, "navigation-response.json") + `'
+ if [ ! -f "$result" ]; then
+  printf '%s' '{"summary":"Navigation already describes the available topics.","changes":[]}' > "$result"
+ fi
+fi
+if [ -n "$output" ]; then cp "$result" "$output"; else cat "$result"; fi
 `
 	if err := os.WriteFile(c.Learning.Executable, []byte(script), 0700); err != nil {
 		t.Fatal(err)
@@ -198,14 +211,26 @@ func TestRecoversDurablePartiallyPublishedResult(t *testing.T) {
 	if err = v.Write(result.Changes[0].Path, []byte(result.Changes[0].Content), false); err != nil {
 		t.Fatal(err)
 	}
+	script, err := os.ReadFile(c.Learning.Executable)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = os.Remove(c.Learning.Executable); err != nil {
 		t.Fatal(err)
 	}
 	status, err := RunOnce(context.Background(), c)
-	if err != nil || status.Status != "completed" || status.RunID != runID {
+	// Lesson recovery needs no model, but subsequent navigation upkeep does.
+	if err == nil || !strings.Contains(err.Error(), "navigation review") || status.RunID != runID || status.TurnsCompleted != 1 {
 		t.Fatalf("failed recovery: %+v %v", status, err)
 	}
 	assertReviewed(t, c, 1)
+	if err = os.WriteFile(c.Learning.Executable, script, 0700); err != nil {
+		t.Fatal(err)
+	}
+	status, err = RunOnce(context.Background(), c)
+	if err != nil || status.Status != "no_work" {
+		t.Fatalf("%+v %v", status, err)
+	}
 	if _, err = v.Navigate("procedures/retry"); err != nil {
 		t.Fatal(err)
 	}

@@ -33,9 +33,12 @@ Commands:
   learning add [--overwrite] NOTE
                                 Publish manual guidance from stdin without a proposal
   learning sessions help        Discover Pi/Codex sessions and track reviewed turns
-  learning run                  Run a bounded learning pass with Pi or Codex
+  learning run                  Run learning and navigation with Pi or Codex
+  learning navigation build     Rebuild memory maps using the learning policy
+  learning navigation discard RUN
+                                Discard a map proposal and leave maintenance pending
   learning doctor [--probe]     Check readiness; --probe makes a real model request
-  learning accept RUN           Publish a queued proposal and complete its review
+  learning accept RUN           Publish a queued lesson or navigation proposal
   learning schedule enable|disable|status
                                 Manage macOS launchd or Linux systemd learning jobs
   config init|path|show          Create or inspect shared TOML settings
