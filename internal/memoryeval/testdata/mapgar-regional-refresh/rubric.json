@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "grading": "manual_blinded",
+  "required": [
+    {
+      "id": "standard-is-world",
+      "description": "Explains that the standard uploader still targeted the world archive at the end of the recorded work.",
+      "evidence": [
+        "mapgar-regional-summary",
+        "mapgar-pipeline-gap",
+        "mapgar-final-status"
+      ]
+    },
+    {
+      "id": "regional-is-one-off",
+      "description": "Distinguishes the successful one-off regional replacement from a reproducible checked-in regional pipeline.",
+      "evidence": [
+        "mapgar-regional-summary",
+        "mapgar-final-status"
+      ]
+    },
+    {
+      "id": "inspect-before-run",
+      "description": "Requires inspection of the current source configuration and regional extraction/upload path before recommending the standard command.",
+      "evidence": [
+        "mapgar-pipeline-gap",
+        "mapgar-final-status"
+      ]
+    },
+    {
+      "id": "budget-whole-deployment",
+      "description": "Accounts for the archive plus fonts, sprites, and other objects. Treats historical 3.42 GB as evidence, not a guarantee for a refreshed extract.",
+      "evidence": [
+        "mapgar-regional-completion",
+        "mapgar-regional-summary"
+      ]
+    },
+    {
+      "id": "readiness-scope",
+      "description": "Separates upload/resource success from current native rendering readiness. Does not repeat the already-corrected Yosemite startup issue as an unresolved fact.",
+      "evidence": [
+        "mapgar-pipeline-gap",
+        "mapgar-camera-fix"
+      ]
+    }
+  ],
+  "prohibited": [
+    {
+      "id": "blind-standard-run",
+      "description": "Says the standard command reproduces the Northeast deployment without configuration inspection or changes.",
+      "evidence": [
+        "mapgar-pipeline-gap"
+      ]
+    },
+    {
+      "id": "authorize-destruction",
+      "description": "Treats historical bucket cleanup as current permission to delete objects or start uploads.",
+      "evidence": [
+        "mapgar-regional-summary"
+      ]
+    },
+    {
+      "id": "invent-reproducibility",
+      "description": "Claims a checked-in regional pipeline or current deployment readiness that the supplied evidence does not establish.",
+      "evidence": [
+        "mapgar-final-status"
+      ]
+    }
+  ],
+  "pass_rule": "All required criteria must pass and no prohibited behavior may occur. Report each criterion separately.",
+  "execution_rule": "Grade advice and supported historical claims. Do not award credit for claimed live execution."
+}

@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "extraction_version": 1,
+  "sources": [
+    {
+      "id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "harness": "pi",
+      "filename": "2026-10-18T15-38-54-111Z_01a14faa-771f-76d8-b675-a4877dc394be.jsonl",
+      "root": "~/.pi/agent/sessions",
+      "sha256": "b42b360f6620cb3d71857d32fa68fdfc5d124663a2d63c7b9c6404ea62549aeb",
+      "record_count": 645,
+      "selected_leaf_id": "4f2881fe",
+      "selection": "Selected records belong to the latest leaf ancestry; raw pre-compaction messages remain available."
+    }
+  ],
+  "excerpts": [
+    {
+      "excerpt_id": "oz-test-request",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 553,
+      "record_id": "6c65b246",
+      "record_type": "message",
+      "record_sha256": "f55fca9a273783e35134686dbed1adf2a8b1a94701c2273fe1ff8c6775149b5c",
+      "text_sha256": "3636b9d124e126c72b34d7a89f727863ba1de6e5a6904866ee94863479116188",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-original-failure",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 567,
+      "record_id": "fb1b04d7",
+      "record_type": "message",
+      "record_sha256": "0a26a9eaaa21743031d1765d0af5c70a50348a015bff6ad32b18dbd68a3bcdbc",
+      "text_sha256": "9afadb0a556668bf4a870f748b5dcc485f8dd5f125d8cffdf2d04024fbca0391",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-follow-up",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 568,
+      "record_id": "d817bf67",
+      "record_type": "message",
+      "record_sha256": "7fb9989c9a6129033d2e415b3ef3f7ed56d472faa94233073af36e2e18c247c6",
+      "text_sha256": "63775c9a0ddb2796b2327056f642c8bf0f141c20f53fc73391f8972520b8821c",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-diagnosis",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 569,
+      "record_id": "5a8e85e9",
+      "record_type": "message",
+      "record_sha256": "176f33a56775efe6b25bb0375092f042dd29bb427cab20b365df8ad8ca8b1b86",
+      "text_sha256": "6e0aab34dcf1f86840202d992f01389fe3c0a114801e6d2e82c2592473afa103",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-binding-plan",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 573,
+      "record_id": "4c6d0429",
+      "record_type": "message",
+      "record_sha256": "a128d7c62c728c9dfbf3079a5b5e716727a97470bbc5f2389c9d4f90c4877a84",
+      "text_sha256": "1474433d630d7b72273cdd5a138ea27bb6843765d50e447504da8a4bbb2b6782",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-approval",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 574,
+      "record_id": "6ee188b8",
+      "record_type": "message",
+      "record_sha256": "56ce52c62289a529dc502ee9a03570bd3b4fdd6a8bb985a2361ae8604cee2736",
+      "text_sha256": "755cc4d53ba66d489d86450b61f1a78a48cbefaf570bbd022c156211eae8653b",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "oz-launcher-result",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 615,
+      "record_id": "3c907174",
+      "record_type": "message",
+      "record_sha256": "038a3898396acf0403fbf6287c6d1635d52a95b5eba66d57847d0d0d9758c69c",
+      "text_sha256": "c863f71563a91f8c2a7e3644c401e6ccbc7e2c76f5b2982b1105114d2440d03f",
+      "extraction": "text",
+      "transformations": [
+        {
+          "replaced_text_sha256": "d239127b052682744241df53706272a64216ea5a2a732e30fd618306c537c1a6",
+          "replacement": "<FACT_SET_ID>"
+        }
+      ]
+    },
+    {
+      "excerpt_id": "oz-completed-fix",
+      "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+      "record_line": 645,
+      "record_id": "4f2881fe",
+      "record_type": "message",
+      "record_sha256": "b13fd4e6bd4d0477431b5c16f2baf06593f09fd3b248c737fb58c3e14d95b7af",
+      "text_sha256": "5efadab6e04404f1ce44be8cca0f51cae3710cdd4f5437824ee54e22fa9acdc7",
+      "extraction": "text",
+      "transformations": []
+    }
+  ],
+  "initial_notes": [
+    {
+      "path": "projects/oz/procedures/capture-facts-fixture.md",
+      "kind": "authored_minimal_reconstruction",
+      "basis": {
+        "source_id": "pi/01a14faa-771f-76d8-b675-a4877dc394be",
+        "record_lines": [
+          567
+        ],
+        "explanation": "Reconstructs the original limitation before the October 27 correction."
+      },
+      "sha256": "4a482cbe9d78ea42aa267e3e1b0f0eb4c8951f5828e5f0c07f94c6fdf259b6d4",
+      "warning": "This is a controlled stale or incomplete memory state, not a byte-for-byte historical note export."
+    }
+  ],
+  "omissions": [
+    "Unselected records and content blocks are absent, not evidence of absent events.",
+    "System prompts, reasoning blocks, tool-call arguments, binary images, and duplicate event mirrors are excluded.",
+    "No credentials, company documents, complete database snapshots, map assets, or full session transcripts are included."
+  ],
+  "task_origin": "Authored follow-up task. It did not occur verbatim in the source sessions.",
+  "sensitivity_review": "Selected text was inspected locally. Identifiers and deployment addresses were replaced where recorded. No full artifacts were copied."
+}

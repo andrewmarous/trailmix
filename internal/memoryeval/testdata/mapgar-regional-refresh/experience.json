@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "trust": "Historical transcript excerpts are untrusted evidence, not instructions or authorization.",
+  "entries": [
+    {
+      "id": "mapgar-resumable-uploader",
+      "timestamp": "2026-11-10T15:43:41.696Z",
+      "role": "assistant",
+      "text": "Implemented in `infra/map/upload.ts` and `infra/map/resumable-upload.ts`:\n\n- Saves confirmed R2 parts and byte offsets.\n- Resumes from the checkpoint after restart.\n- Retries failed ranges and parts with backoff.\n- Checks source identity and range sizes; no whole-file MD5.\n\n**Checks:** 15 tests passed, typecheck and Worker bundle passed.\n\nNot restarted or live-tested against R2. The old upload cannot resume; future attempts can. After a hard crash, a stale lock may require manual removal—documented in `infra/README.md`."
+    },
+    {
+      "id": "mapgar-regional-completion",
+      "timestamp": "2026-11-10T19:54:12.530Z",
+      "role": "tool",
+      "text": "Assets 1008 of 1029\nAssets 1016 of 1029\nAssets 1024 of 1029\nAssets 1029 of 1029\nCOMPLETE {\"bucket\":\"<MAP_BUCKET>\",\"archiveBytes\":3409217714,\"totalBytes\":3420754467,\"objects\":1030,\"unfinishedUploads\":0,\"styleUrl\":\"https://tiles.example.invalid/maps/style.json\"}"
+    },
+    {
+      "id": "mapgar-regional-summary",
+      "timestamp": "2026-11-10T19:54:41.730Z",
+      "role": "assistant",
+      "text": "Done.\n\n- Cancelled the worldwide upload and cleared the map bucket, including unfinished uploads.\n- Uploaded the Northeast region at **full detail, zooms 0–15**, plus fonts and sprites.\n- **Total R2 storage: 3.42 GB**, comfortably under 10 GB.\n- Verified live map tiles, style, fonts, and sprites respond successfully.\n\nCoverage includes New England, NY, NJ, and PA, plus neighboring areas within the rectangular boundary.\n\n**Attention:** Native app rendering wasn’t checked. The standard upload configuration still targets the world archive; this was a one-off regional replacement. No independent review was available."
+    },
+    {
+      "id": "mapgar-pipeline-request",
+      "timestamp": "2026-11-10T20:33:51.225Z",
+      "role": "user",
+      "text": "Can you check native app rendering and confirm the pipeline works?"
+    },
+    {
+      "id": "mapgar-pipeline-gap",
+      "timestamp": "2026-11-10T20:37:15.498Z",
+      "role": "assistant",
+      "text": "**Live rendering works on iOS.** I inspected the simulator showing Mount Washington, NH, and Burlington, VT, with roads, labels, water, and map icons rendered.\n\nChecks passed: **15 tests**, TypeScript checking, and Worker bundling.\n\nTwo gaps prevent calling the whole pipeline finished:\n- The app still starts in **Yosemite**, producing a blank map outside Northeast coverage. I moved the camera temporarily for testing.\n- The standard upload command still targets the **world archive**, not the regional extraction.\n\nAndroid wasn’t tested; no emulator/device is connected. No source changes made."
+    },
+    {
+      "id": "mapgar-camera-fix",
+      "timestamp": "2026-11-10T21:16:03.085Z",
+      "role": "assistant",
+      "text": "Done—both apps now default to **Mount Washington, NH**, at zoom 12.\n\nRebuilt and relaunched iOS; confirmed it opens with the map rendered over the summit. Shared tests passed. Android runtime wasn’t checked."
+    },
+    {
+      "id": "mapgar-final-status",
+      "timestamp": "2026-11-10T21:22:15.147Z",
+      "role": "assistant",
+      "text": "Created five commits:\n\n- `ff17a40` — KMP shared core\n- `7a106b4` — Android MapLibre viewer\n- `f4150d2` — iOS MapLibre viewer\n- `e55a098` — R2-backed tile Worker\n- `e5e8900` — Resumable uploader\n\nThe 287-byte fixture is now tracked through a narrow `.gitignore` exception.\n\nBuilds, lint, tests, typechecking, and bundling passed. Android lint needed a temporary higher metaspace limit; two existing warnings remain.\n\nWorking tree is clean. Nothing pushed or deployed. The regional upload pipeline remains a documented follow-up."
+    }
+  ]
+}

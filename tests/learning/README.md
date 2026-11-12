@@ -1,7 +1,19 @@
-# Learning evaluation
+# Learning evaluation — WIP
 
-This is a manual agent evaluation, not an automated model benchmark.
-The CLI tests cover ledger transitions. These cases evaluate agent behavior.
+**Status: exploratory work, paused.** These scenarios and historical packets are not a validated memory-system evaluation suite.
+Further suite development and model runs are out of scope unless explicitly requested.
+Anthropic's memory research provides the improvement direction; a custom suite is not a prerequisite.
+See the [WIP scope and research link](../../internal/memoryeval/README.md).
+
+The draft procedure below describes manual agent evaluation, not an automated model benchmark.
+The CLI tests cover ledger transitions. These cases target agent behavior.
+
+## Historical cases
+
+[The historical case packets](../../internal/memoryeval/README.md) cover Oz facts-only MCP access,
+Mapgar regional uploads, and Wasurf arithmetic corrections.
+Each packet separates learning evidence, initial notes, a future task, and a source-backed rubric.
+They do not include a runner or measured model results.
 
 ## Procedure
 

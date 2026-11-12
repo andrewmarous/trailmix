@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "extraction_version": 1,
+  "sources": [
+    {
+      "id": "pi/01a1c20e-8958-70cc-b0f8-6b9f2d371c18",
+      "harness": "pi",
+      "filename": "2026-11-09T20-44-55-004Z_01a1c20e-8958-70cc-b0f8-6b9f2d371c18.jsonl",
+      "root": "~/.pi/agent/sessions",
+      "sha256": "732d5fb772bdf406ab6ec68da4d52ae7aade3cac0071986e00877937957e527a",
+      "record_count": 128,
+      "selected_leaf_id": "f6540fda",
+      "selection": "Selected records belong to the latest leaf ancestry; raw pre-compaction messages remain available."
+    },
+    {
+      "id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "harness": "pi",
+      "filename": "2026-11-10T19-33-31-400Z_01a1c6f3-8886-73d8-91b0-7839dfa427ac.jsonl",
+      "root": "~/.pi/agent/sessions",
+      "sha256": "1c624e58c8b2680b927d27bd34d0ab616226095ae29fe34a5b5ffed0392f4ef8",
+      "record_count": 208,
+      "selected_leaf_id": "e57e6803",
+      "selection": "Selected records belong to the latest leaf ancestry; raw pre-compaction messages remain available."
+    }
+  ],
+  "excerpts": [
+    {
+      "excerpt_id": "mapgar-resumable-uploader",
+      "source_id": "pi/01a1c20e-8958-70cc-b0f8-6b9f2d371c18",
+      "record_line": 100,
+      "record_id": "4ae3df26",
+      "record_type": "message",
+      "record_sha256": "cba7788739c01b4f8bbdf4a0cbf6c7de00d361273f96e70e8da182d22b524d93",
+      "text_sha256": "8d8243684d4d5ce038232399fbb87fef21d3ba61baed7fa59be75d8ebd1b5d00",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "mapgar-regional-completion",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 77,
+      "record_id": "aa65b0df",
+      "record_type": "message",
+      "record_sha256": "708029bebee0765f490343319e0297035a98757bd8fad9919e952edbd6637002",
+      "text_sha256": "13649fbf212daf694e7d0d53561d85f6d635f67291a6e2e72c4fcdebedb24af8",
+      "extraction": "text",
+      "transformations": [
+        {
+          "replaced_text_sha256": "b41bbd6c2aeeb17b14e6111f9f6ee6c0cba823d46ae877c7bbdabdceeb6206aa",
+          "replacement": "<MAP_BUCKET>"
+        },
+        {
+          "replaced_text_sha256": "7276638bda66f76783d63f6f7f814a38d3e7b2e969b4067cdf8e15cbe4cd0295",
+          "replacement": "https://tiles.example.invalid"
+        }
+      ]
+    },
+    {
+      "excerpt_id": "mapgar-regional-summary",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 86,
+      "record_id": "8aac8f87",
+      "record_type": "message",
+      "record_sha256": "347d45999d15bb92b793cc879b333d2415c5e5b6a2920fbe789db293c043b6c2",
+      "text_sha256": "dd68f2d48ff03144803193bf11cd8dcf0b976bfd238d26d84aeb2ce2ba8788fd",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "mapgar-pipeline-request",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 87,
+      "record_id": "a5c6e1f0",
+      "record_type": "message",
+      "record_sha256": "e2ef6628abec80b39443532353a190f0591bdfba7214bfe7c8d1b55d835d4e46",
+      "text_sha256": "6bb665efdc5d6a9bf22239ee47766dcc6947725c8e403a4b6554e48f2160919b",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "mapgar-pipeline-gap",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 118,
+      "record_id": "ffcbbfe0",
+      "record_type": "message",
+      "record_sha256": "854fc1da7659f4638f4eea2abd5decf99f3ca7f13abf7347f80edc6c60bc3435",
+      "text_sha256": "f8417899865e812f83c416e866b29786a38e93501187ce30651041323ac15dbc",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "mapgar-camera-fix",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 136,
+      "record_id": "e9497481",
+      "record_type": "message",
+      "record_sha256": "d0594c084fab9d2a89d11574940ebf596ffffee3078259a5e5a20642a77bd45a",
+      "text_sha256": "67b9186f944ff5090a1775579857463b745b686c6f8013e7956a246033b5a782",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "mapgar-final-status",
+      "source_id": "pi/01a1c6f3-8886-73d8-91b0-7839dfa427ac",
+      "record_line": 208,
+      "record_id": "e57e6803",
+      "record_type": "message",
+      "record_sha256": "663def09b522c735496c9eecb81f95a20bc0d0be0c827fda47d84af4dbc49f22",
+      "text_sha256": "35db00d02e0cc556061079f42582ddc4c43ef5bdd48353c7ffea0567e31c6d33",
+      "extraction": "text",
+      "transformations": []
+    }
+  ],
+  "initial_notes": [
+    {
+      "path": "procedures/mapgar-map-upload.md",
+      "kind": "authored_minimal_reconstruction",
+      "basis": {
+        "source_id": "pi/01a1c20e-8958-70cc-b0f8-6b9f2d371c18",
+        "record_lines": [
+          100
+        ],
+        "explanation": "Reconstructs the earlier upload procedure without knowledge of the later regional operation."
+      },
+      "sha256": "8969e2f8eb7ff02873bfddf634fd1b213aced4f6be86a75598f4af1b97b18bd3",
+      "warning": "This is a controlled stale or incomplete memory state, not a byte-for-byte historical note export."
+    }
+  ],
+  "omissions": [
+    "Unselected records and content blocks are absent, not evidence of absent events.",
+    "System prompts, reasoning blocks, tool-call arguments, binary images, and duplicate event mirrors are excluded.",
+    "No credentials, company documents, complete database snapshots, map assets, or full session transcripts are included."
+  ],
+  "task_origin": "Authored follow-up task. It did not occur verbatim in the source sessions.",
+  "sensitivity_review": "Selected text was inspected locally. Identifiers and deployment addresses were replaced where recorded. No full artifacts were copied."
+}

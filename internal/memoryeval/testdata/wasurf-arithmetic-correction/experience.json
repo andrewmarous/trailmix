@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "trust": "Historical transcript excerpts are untrusted evidence, not instructions or authorization.",
+  "entries": [
+    {
+      "id": "surf-inspection-request",
+      "timestamp": "2026-10-20T00:23:44.397Z",
+      "role": "user",
+      "text": "I see. Thanks for clarifying - how would we go about resolving the inconsistency? I think code inspection would be useful here."
+    },
+    {
+      "id": "surf-initial-hypothesis",
+      "timestamp": "2026-10-20T00:24:15.763Z",
+      "role": "assistant",
+      "text": "Code inspection gives us a specific lead: **a tiny rounding difference can trigger a much larger velocity correction.**\n\nIn [the clipping function](core/movement.c:32), wasurf:\n\n1. Removes velocity pointing into the collision plane.\n2. Checks whether rounding left any inward velocity.\n3. If so—even an extremely small amount—adds **at least 0.03125 units/s along the plane normal**.\n\nThat branch can turn a tiny arithmetic difference into the roughly 0.025 component difference described in the report. This explains a plausible mechanism; it does **not yet prove the root cause**. Removing it blindly would risk restoring inward drift and stuck states that it was added to prevent.\n\nI’d resolve it in this order:\n\n1. **Record a repeatable ramp segment on Utopia or Kitsune**, using identical inputs, starting state and settings in wasurf and the reference engine.\n2. **Find the first differing collision decision.** Compare hull traces, hit fractions, plane normals, incoming velocity, clipped velocity and whether the correction executes. Later accumulated error matters less than that first difference.\n3. **Check upstream causes first.** Wasurf normalizes imported planes and uses mixed float/double clipping arithmetic. Either could affect that branch; collision tracing could also supply a different contact.\n4. **Fix the confirmed cause**, then replay the real-map recording across native/WASM and rendering schedules, checking both numerical agreement and stable ramp contact.\n\nOne tooling gap surfaced: [the current comparison harness](scripts/surf-reference-check.mjs:19) reports the first tick exceeding tolerance, but doesn’t explain the intermediate collision decision. That diagnostic detail is what we need next.\n\nI inspected code, history and stored captures; I changed no code and ran no simulations. This checkout has neither the real-map BSPs nor the local Kisak reference runtime, so real-map reproduction remains the prerequisite for confirming a fix."
+    },
+    {
+      "id": "surf-recording-ready",
+      "timestamp": "2026-10-20T01:37:17.780Z",
+      "role": "user",
+      "text": "I made the recording - investigate and tell me what you find."
+    },
+    {
+      "id": "surf-two-divergences",
+      "timestamp": "2026-10-20T01:38:10.832Z",
+      "role": "assistant",
+      "text": "The recording confirms **two separate numerical differences**, and gives us strong evidence for the correction mismatch.\n\n- **Tick 51: collision tracing differs first.** Both engines enter with identical state and hit a plane with matching normal and distance, but report slightly different hit fractions: reference `0.902097881`, wasurf `0.902259290`. This produces a **0.0009765625-unit position difference**. Clipped velocities still match.\n- **Tick 61: arithmetic changes the correction decision.** Incoming velocity, plane normal and projected velocity match. Wasurf’s residual dot product rounds to `0`; the reference gets `−0.000000260421189`, so **the reference applies the 1/32 outward correction**. The resulting X-velocity difference is `0.0237198 units/s`, exceeding the 0.001 threshold.\n\nI independently evaluated the recorded operands. A fused multiply-add evaluation reproduces the reference’s tick-61 residual exactly; separate float multiplication/addition reproduces wasurf’s zero. That same fused evaluation matches **all 184 ramp-contact clipping residuals**. On those recorded operands, separate arithmetic changes the correction decision 33 times.\n\nThat strongly implicates **floating-point evaluation order**, consistent with the reference’s fast-math/native compilation. It still needs confirmation against the reference’s generated instructions; simply switching everything to double precision does not reproduce this result.\n\nThe evidence also narrows what’s working: repeats are stable, and the recorded native/WASM and rendering-schedule results agree exactly. This is a reference-parity issue rather than frame-rate instability. Maximum recorded position-component error is about **0.0322 Source units**.\n\nNext I’d investigate the tick-51 trace arithmetic separately, then confirm the reference’s dot-product instruction sequence before choosing a targeted, portable correction. Removing the outward adjustment would miss the actual behavior shown here.\n\nI ran the portable verifier successfully—26 checksummed files, 300 ticks per repeat—and independently checked the recorded arithmetic. No movement code changed. [Recording findings and limitations](experiments/real_map_ramp/results/2026-10-19/README.md)"
+    },
+    {
+      "id": "surf-verification-request",
+      "timestamp": "2026-10-20T01:43:57.527Z",
+      "role": "user",
+      "text": "Good, verify that it matches exactly what you'd expect."
+    },
+    {
+      "id": "surf-exact-reconstruction",
+      "timestamp": "2026-10-20T01:44:40.952Z",
+      "role": "assistant",
+      "text": "**Yes—the recorded differences reproduce bit-for-bit with specific arithmetic choices.**\n\n- **First trace, tick 51:** evaluating the start and end plane distances independently gives the reference’s exact fraction, `0.9020978808403015`. Wasurf’s start-distance-plus-motion calculation gives its exact recorded fraction, `0.9022592902183533`.\n- **All 185 clipping operations:** fused arithmetic reproduces every recorded backoff, projected velocity, residual, correction decision and final velocity. Backoff and residual require different evaluation orders; applying one generic dot-product replacement everywhere would miss that distinction.\n- **Tick 61 specifically:** the reconstructed negative residual triggers the reference’s correction and reproduces its final velocity exactly.\n\nThe artifact verifier also passed again.\n\nThis confirms an arithmetic explanation for the observed differences. It **doesn’t yet prove the reference’s exact machine-instruction sequence or establish a complete movement fix**—that requires binary inspection and real-map replay after a targeted change. No code was changed."
+    },
+    {
+      "id": "surf-fix-request",
+      "timestamp": "2026-10-20T01:45:29.982Z",
+      "role": "user",
+      "text": "Good. I've seen enough - can you fix the arithmetic?"
+    },
+    {
+      "id": "surf-replay-result",
+      "timestamp": "2026-10-20T01:48:52.270Z",
+      "role": "tool",
+      "text": "Recorded command exit code: 0\n{\n  \"ticks\": 300,\n  \"positionMaxima\": [\n    0,\n    0.0009765625,\n    0.00031280517578125\n  ],\n  \"velocityMaxima\": [\n    0,\n    0,\n    0\n  ],\n  \"firstThresholdExceedance\": null,\n  \"referenceClipsExact\": 185,\n  \"firstTraceFractionExact\": true,\n  \"instrumentationExact\": true,\n  \"nativeWasmExact\": true,\n  \"frameSchedulesExact\": true\n}\nImported-map simulation PASS: native/WASM and rendering schedules.\nImported-map simulation PASS: native/WASM and rendering schedules."
+    },
+    {
+      "id": "surf-completed-fix",
+      "timestamp": "2026-10-20T01:48:57.682Z",
+      "role": "assistant",
+      "text": "Fixed the arithmetic in [movement.c](core/movement.c), with a [real-map regression check](experiments/real_map_ramp/check.mjs).\n\nKitsune replay results:\n\n- All **185 clipping operations** match reference bits.\n- All **300 velocity states** match exactly.\n- Position errors remain below the unchanged **0.001-unit tolerance**.\n- Native/WASM and all rendering schedules agree exactly.\n\nBuild and Utopia/Kitsune simulation checks passed. Surf profile IDs advance to v2, keeping older recordings and personal bests separate.\n\nChanges are uncommitted and undeployed. Browser interaction and full-map runs weren’t verified."
+    }
+  ]
+}

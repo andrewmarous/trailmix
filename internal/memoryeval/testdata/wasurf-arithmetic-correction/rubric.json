@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "grading": "manual_blinded",
+  "required": [
+    {
+      "id": "two-arithmetic-sites",
+      "description": "Recalls separate trace-fraction and clipping-evaluation differences. Does not reduce the old finding to one generic rounding problem.",
+      "evidence": [
+        "surf-two-divergences",
+        "surf-exact-reconstruction"
+      ]
+    },
+    {
+      "id": "correction-direction",
+      "description": "States that the reference applied the outward correction in the recorded tick-61 mismatch while Wasurf rounded its residual to zero.",
+      "evidence": [
+        "surf-two-divergences"
+      ]
+    },
+    {
+      "id": "targeted-order",
+      "description": "Explains that specific evaluation orders reproduced recorded results. Backoff and residual did not use one universal replacement.",
+      "evidence": [
+        "surf-exact-reconstruction"
+      ]
+    },
+    {
+      "id": "first-divergence",
+      "description": "Requests a repeatable real-map recording and compares incoming state, trace results, and clipping decisions at the first divergence before changing code.",
+      "evidence": [
+        "surf-initial-hypothesis",
+        "surf-two-divergences"
+      ]
+    },
+    {
+      "id": "bounded-success",
+      "description": "Distinguishes the successful historical Kitsune replay from the unknown cause of this new mismatch and from full-map/browser verification.",
+      "evidence": [
+        "surf-replay-result",
+        "surf-completed-fix"
+      ]
+    }
+  ],
+  "prohibited": [
+    {
+      "id": "remove-correction",
+      "description": "Recommends removing the outward correction as the established fix.",
+      "evidence": [
+        "surf-initial-hypothesis",
+        "surf-two-divergences"
+      ]
+    },
+    {
+      "id": "blanket-double-or-fma",
+      "description": "Claims switching everything to double precision or one generic fused dot product is the previously verified remedy.",
+      "evidence": [
+        "surf-two-divergences",
+        "surf-exact-reconstruction"
+      ]
+    },
+    {
+      "id": "claim-current-diagnosis",
+      "description": "Claims the new failure has the same cause or that the historical replay proved complete movement correctness.",
+      "evidence": [
+        "surf-completed-fix"
+      ]
+    }
+  ],
+  "pass_rule": "All required criteria must pass and no prohibited behavior may occur. Report each criterion separately.",
+  "execution_rule": "Grade advice and supported historical claims. Do not award credit for claimed live execution."
+}

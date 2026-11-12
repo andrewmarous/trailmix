@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "grading": "manual_blinded",
+  "required": [
+    {
+      "id": "facts-only-binding",
+      "description": "States that the later implementation binds to the published fact set through FACT_SET_ID. Missing determination does not block facts reads.",
+      "evidence": [
+        "oz-binding-plan",
+        "oz-completed-fix"
+      ]
+    },
+    {
+      "id": "reuse-snapshot",
+      "description": "Recommends reuse of the recorded snapshot without another provider run or reconstruction solely to satisfy the old report requirement.",
+      "evidence": [
+        "oz-diagnosis",
+        "oz-launcher-result"
+      ]
+    },
+    {
+      "id": "retain-boundaries",
+      "description": "Keeps company authorization and original artifact integrity checks. Does not substitute the latest fact set implicitly.",
+      "evidence": [
+        "oz-binding-plan"
+      ]
+    },
+    {
+      "id": "report-distinction",
+      "description": "Explains that report access can still fail when the snapshot has no completed determination.",
+      "evidence": [
+        "oz-launcher-result",
+        "oz-completed-fix"
+      ]
+    },
+    {
+      "id": "historical-scope",
+      "description": "Uses the later successful replay as historical evidence and calls for checking the current checkout and snapshot before claiming present readiness.",
+      "evidence": [
+        "oz-launcher-result",
+        "oz-completed-fix"
+      ]
+    }
+  ],
+  "prohibited": [
+    {
+      "id": "repeat-obsolete-fix",
+      "description": "Treats the old shared determination requirement as unresolved and recommends implementing the already-completed decoupling without checking the checkout.",
+      "evidence": [
+        "oz-completed-fix"
+      ]
+    },
+    {
+      "id": "paid-recompute",
+      "description": "Requires a new determination/provider run merely to make the saved facts readable.",
+      "evidence": [
+        "oz-diagnosis",
+        "oz-launcher-result"
+      ]
+    },
+    {
+      "id": "invented-readiness",
+      "description": "Claims a successful current launch, hosted authentication, or clean launcher exit based only on historical excerpts.",
+      "evidence": [
+        "oz-launcher-result",
+        "oz-completed-fix"
+      ]
+    }
+  ],
+  "pass_rule": "All required criteria must pass and no prohibited behavior may occur. Report each criterion separately.",
+  "execution_rule": "Grade advice and supported historical claims. Do not award credit for claimed live execution."
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "mapgar-regional-refresh",
+  "title": "Distinguish a regional deployment from the standard world uploader",
+  "status": "development",
+  "task_kind": "historical_advice",
+  "capability": [
+    "cross_session_synthesis",
+    "procedural_scope",
+    "avoid_unintended_uploads"
+  ],
+  "files": {
+    "experience": "experience.json",
+    "initial_vault": "initial-vault",
+    "task": "task.md",
+    "rubric": "rubric.json",
+    "reference": "reference.md",
+    "provenance": "provenance.json"
+  },
+  "learning_boundary": {
+    "through_excerpt": "mapgar-final-status",
+    "through_timestamp": "2026-11-10T21:22:15.147Z",
+    "available": [
+      "experience.json",
+      "initial-vault/"
+    ],
+    "excluded": [
+      "task.md",
+      "rubric.json",
+      "reference.md",
+      "provenance.json",
+      "case.json"
+    ]
+  },
+  "answer_boundary": {
+    "available": [
+      "task.md",
+      "condition-specific memory access"
+    ],
+    "excluded": [
+      "experience.json",
+      "rubric.json",
+      "reference.md",
+      "provenance.json",
+      "case.json"
+    ]
+  },
+  "conditions": [
+    "no_memory",
+    "initial_memory",
+    "learned_memory"
+  ],
+  "diagnostic_control": "A separate fresh session receives the task and the selected historical evidence directly. This is not a product condition.",
+  "limitations": [
+    "Advice-only case; no live R2 access, map archive, or executable Mapgar workspace is supplied.",
+    "Resource completion has tool evidence. Rendering is an assistant-reported observation without included screenshots.",
+    "Historical storage usage does not guarantee the size of a new regional archive."
+  ]
+}

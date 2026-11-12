@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "extraction_version": 1,
+  "sources": [
+    {
+      "id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "harness": "codex",
+      "filename": "rollout-2026-10-19T20-17-36-01a156ab-b56b-79b2-8a33-6142b30ac994.jsonl",
+      "root": "~/.codex/sessions",
+      "sha256": "2a3fd60e0fa33a552b5e6436ab1f09ae7277501635b4f516dc4fb5ecd57855b1",
+      "record_count": 883,
+      "selection": "Chronological response_item records only; event_msg mirrors, reasoning, and system context are excluded."
+    }
+  ],
+  "excerpts": [
+    {
+      "excerpt_id": "surf-inspection-request",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 90,
+      "record_id": "msg_01a156b1-540d-77f3-b945-46b3f24bbd1a",
+      "record_type": "response_item",
+      "record_sha256": "0649a9bbe09482d472258d8ee869e85c13e96116f84dd924b3eee263509e6db6",
+      "text_sha256": "0df447bd9fd9c1e50252e476257719547241ad7ae9b908762c82e6b1b249b74d",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "surf-initial-hypothesis",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 128,
+      "record_id": "msg_037ba5c6b1ec0ee0016ad6b4a79db88193b949b4108e6a320d",
+      "record_type": "response_item",
+      "record_sha256": "8eb69c6f4bcbecbf1c38c4bce54615f60d52a7c6be6cf81c098410ec047c86fd",
+      "text_sha256": "b0ab060e51e3cdf0a07b693c445f5a7b799c1430245e5a396e5a4958a19ade3f",
+      "extraction": "text",
+      "transformations": [
+        "Replaced the absolute Wasurf checkout prefix with repository-relative paths."
+      ]
+    },
+    {
+      "excerpt_id": "surf-recording-ready",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 206,
+      "record_id": "msg_01a156f4-abd4-7753-b06c-fae6caf2acfb",
+      "record_type": "response_item",
+      "record_sha256": "25b97ac37d578d858cd9e5fa6a86f620a5a7590a1918654c70c4d6563e059aad",
+      "text_sha256": "d4d2febf7dccc12aefe7135b253dd40c6589caf8098fe84ab9adfa5465381936",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "surf-two-divergences",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 258,
+      "record_id": "msg_037ba5c6b1ec0ee0016ad6c5f99fcc8193a22791b1c48d8f89",
+      "record_type": "response_item",
+      "record_sha256": "43658fa265195283b5f1f72da6edefc99f17ebec771cfafe3178a0986e3a30e5",
+      "text_sha256": "742bf6ea23b949416b11c7713544c97838fc74e539a35f5a6d03e15ab39e7bd6",
+      "extraction": "text",
+      "transformations": [
+        "Replaced the absolute Wasurf checkout prefix with repository-relative paths."
+      ]
+    },
+    {
+      "excerpt_id": "surf-verification-request",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 265,
+      "record_id": "msg_01a156fa-c557-7ce1-841c-240d4cf1b7c2",
+      "record_type": "response_item",
+      "record_sha256": "3721a3008ab868f179b4657f89e9edd9abb5392624e2289b1f602aa6ffa4f9e9",
+      "text_sha256": "7ea2fe9a5950296e036cb574c508dff116a10cdc3ee512ddc0e0e332d8ac97a3",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "surf-exact-reconstruction",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 298,
+      "record_id": "msg_037ba5c6b1ec0ee0016ad6c784a1c48193899c802dde16c05b",
+      "record_type": "response_item",
+      "record_sha256": "b6b7971e4d7f462d83c914cfeaab2a83bdd6e56301e2cc7e6b4537b9d0703235",
+      "text_sha256": "9df633389e3751846a37b107bbf37ce5d40e5ce8d4f106e8c0eb9130869133bf",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "surf-fix-request",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 305,
+      "record_id": "msg_01a156fc-2e7e-7951-b542-6787403935b3",
+      "record_type": "response_item",
+      "record_sha256": "92b0c12a52e63c873821a9f93023969d6a891dc09dabc3492f2deab563b0c5de",
+      "text_sha256": "e71dceab9b4e6a0b33b7e8178b263ba6342ee1e8c905f02bce173a2751357224",
+      "extraction": "text",
+      "transformations": []
+    },
+    {
+      "excerpt_id": "surf-replay-result",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 459,
+      "record_id": "call_112a991401b0485aa7a333a9a4a45f81",
+      "record_type": "response_item",
+      "record_sha256": "d9dd036cb8eda61b14b36f4fbda9a26b7f018caa1cd33c8629431a4f75cfd4ca",
+      "text_sha256": "91fd8236b301c88834e6593187f0343d5234e9fb84d58181170bbb7e658f5885",
+      "extraction": "first_tool_output",
+      "transformations": [
+        "Decoded the first command-result JSON envelope. Retained its exit code and output; omitted later command outputs."
+      ]
+    },
+    {
+      "excerpt_id": "surf-completed-fix",
+      "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+      "record_line": 464,
+      "record_id": "msg_037ba5c6b1ec0ee0016ad6c8870eb48193897680b7b261590d",
+      "record_type": "response_item",
+      "record_sha256": "c3fd71747f1a5bfb2b4f4f142530e68f00c28a86928ea69632666b0370fc7e57",
+      "text_sha256": "c8bf075552331cc097db2014e0f57e1bbd309d304c1f453af8fe5d4c0e626157",
+      "extraction": "text",
+      "transformations": [
+        "Replaced the absolute Wasurf checkout prefix with repository-relative paths."
+      ]
+    }
+  ],
+  "initial_notes": [
+    {
+      "path": "experiences/wasurf-ramp-parity.md",
+      "kind": "authored_minimal_reconstruction",
+      "basis": {
+        "source_id": "codex/01a156ab-b56b-79b2-8a33-6142b30ac994",
+        "record_lines": [
+          128
+        ],
+        "explanation": "Reconstructs the early, explicitly unconfirmed hypothesis before the recording analysis."
+      },
+      "sha256": "27f103479a3180d44ab81bc8d0ad16c678c35b34b7ec3e3328d1a0831c7fe160",
+      "warning": "This is a controlled stale or incomplete memory state, not a byte-for-byte historical note export."
+    }
+  ],
+  "omissions": [
+    "Unselected records and content blocks are absent, not evidence of absent events.",
+    "System prompts, reasoning blocks, tool-call arguments, binary images, and duplicate event mirrors are excluded.",
+    "No credentials, company documents, complete database snapshots, map assets, or full session transcripts are included."
+  ],
+  "task_origin": "Authored follow-up task. It did not occur verbatim in the source sessions.",
+  "sensitivity_review": "Selected text was inspected locally. Identifiers and deployment addresses were replaced where recorded. No full artifacts were copied."
+}
