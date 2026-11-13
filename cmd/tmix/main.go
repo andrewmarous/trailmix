@@ -46,6 +46,8 @@ Commands:
   instructions                  Print the operating guide
   init    [--install-obsidian] [--learning-state-dir PATH]
                                 Create the vault and initialize the learning cutoff
+  index   [--model PATH] [--runtime PATH] [--state-dir PATH]
+                                Build a local Markdown embedding and BM25 index
   search  [--limit N] [--json] QUERY
   links   [--json] NOTE          Resolve outgoing links and backlinks
   read    NOTE                   Print Markdown
@@ -135,6 +137,9 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 	}
 	if command == "learning" {
 		return runLearning(args[1:], *root, cfg, *configPath, in, out, diagnostics)
+	}
+	if command == "index" {
+		return runIndex(args[1:], *root, cfg.Retrieval, out, diagnostics)
 	}
 	switch command {
 	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
@@ -361,18 +366,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		}
 		return err
 	case "search":
-		results, err := v.Search(strings.Join(positional, " "), limit)
-		if err != nil {
-			return err
-		}
-		if jsonOutput {
-			return json.NewEncoder(out).Encode(results)
-		}
-		for _, r := range results {
-			if _, err := fmt.Fprintf(out, "%s:%d: %s\n", r.Path, r.Line, r.Snippet); err != nil {
-				return err
-			}
-		}
+		return runSearch(v, cfg.Retrieval, strings.Join(positional, " "), limit, jsonOutput, out, diagnostics)
 	}
 	return nil
 }

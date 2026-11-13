@@ -12,6 +12,8 @@ cutoff="$("$binary" learning sessions --state-dir "$state" config)"
 "$binary" --vault "$vault" init --learning-state-dir "$state" > /dev/null
 test "$cutoff" = "$("$binary" learning sessions --state-dir "$state" config)"
 printf '# Release check\n\nFind this release-check-marker.\n' | "$binary" --vault "$vault" write inbox/check
+printf '[retrieval]\nmode = "text"\nstate_dir = "%s/index"\n' "$state" > "$XDG_CONFIG_HOME/trailmix/config.toml"
+"$binary" --vault "$vault" index
 "$binary" --vault "$vault" search release-check-marker | grep -F 'inbox/check.md'
 "$binary" --vault "$vault" read inbox/check | grep -F 'release-check-marker'
 printf '\n[[inbox/check]]\n' | "$binary" --vault "$vault" write inbox/link

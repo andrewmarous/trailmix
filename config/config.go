@@ -13,11 +13,19 @@ import (
 )
 
 type Config struct {
-	Remotes  map[string]string `toml:"remotes"`
-	Sync     Sync              `toml:"sync"`
-	Vault    Vault             `toml:"vault"`
-	Learning Learning          `toml:"learning"`
+	Remotes   map[string]string `toml:"remotes"`
+	Sync      Sync              `toml:"sync"`
+	Vault     Vault             `toml:"vault"`
+	Learning  Learning          `toml:"learning"`
+	Retrieval Retrieval         `toml:"retrieval"`
 }
+type Retrieval struct {
+	Mode     string `toml:"mode"`
+	Runtime  string `toml:"runtime"`
+	Model    string `toml:"model"`
+	StateDir string `toml:"state_dir"`
+}
+
 type Sync struct {
 	Remote   string   `toml:"remote"`
 	Schedule Schedule `toml:"schedule"`
@@ -55,6 +63,8 @@ func Path(home string) string {
 }
 func Defaults(home string) Config {
 	var c Config
+	c.Retrieval.Mode = "text"
+	c.Retrieval.Runtime = "llama-server"
 	c.Sync.Remote = "origin"
 	c.Sync.Schedule.Interval = "5m"
 	c.Vault.Path = filepath.Join(home, ".trailmix")
@@ -93,6 +103,21 @@ func Load(path, home string) (Config, error) {
 	}
 	c.Vault.Path = filepath.Clean(Expand(c.Vault.Path, home))
 	c.Learning.StateDir = filepath.Clean(Expand(c.Learning.StateDir, home))
+	for _, path := range []*string{&c.Retrieval.Model, &c.Retrieval.StateDir} {
+		if *path != "" {
+			*path = Expand(*path, home)
+			if !filepath.IsAbs(*path) {
+				return c, fmt.Errorf("retrieval model and state_dir must be absolute paths")
+			}
+			*path = filepath.Clean(*path)
+		}
+	}
+	if strings.Contains(c.Retrieval.Runtime, "/") {
+		c.Retrieval.Runtime = Expand(c.Retrieval.Runtime, home)
+		if !filepath.IsAbs(c.Retrieval.Runtime) {
+			return c, fmt.Errorf("retrieval.runtime must be an absolute path or command name")
+		}
+	}
 	for _, root := range []*string{&c.Learning.Sources.Pi, &c.Learning.Sources.Codex, &c.Learning.Sources.CodexArchive} {
 		if *root != "" {
 			*root = Expand(*root, home)
@@ -162,6 +187,13 @@ interval = "5m"
 
 [vault]
 path = "~/.trailmix"
+
+[retrieval]
+# text uses BM25 only; hybrid adds local query embeddings and rank fusion.
+mode = "text"
+runtime = "llama-server"
+model = "" # Required for hybrid: installed Qwen3-Embedding-0.6B GGUF.
+# state_dir = "/absolute/path/to/local/index" # Default: vault-scoped machine cache.
 
 [learning]
 # Select pi or codex and explicitly select automatic or proposals.

@@ -36,6 +36,7 @@ Create your vault and save one note:
 ```sh
 tmix init
 printf '# Retry policy\n\nRetry transient failures up to three times.\n' | tmix write decisions/retries
+tmix index
 tmix search retry
 tmix read decisions/retries
 ```
@@ -58,6 +59,14 @@ The default interval is one hour. macOS uses launchd; Linux uses a systemd user 
 Use `tmix learning schedule status` or `disable` to inspect or remove the job.
 See [scheduled learning](docs/learning.md) for configuration, credentials, proposals, and recovery.
 Notes are not encrypted. Keep secrets out of notes and use a private repository for remote backups.
+
+### Local retrieval (draft)
+
+`tmix search` reads a machine-local SQLite index. Build or refresh it with `tmix index`.
+The default `text` mode uses BM25 without a model or runtime.
+Set `retrieval.mode` to `hybrid` to combine BM25 and Qwen3 embedding similarity through rank fusion, without reranking.
+Hybrid mode requires explicit model and llama.cpp paths. Each operation stops its runtime before returning.
+See [local retrieval](docs/retrieval.md) for configuration, source validation, and opt-in inference checks.
 
 ## Connect your agent
 
@@ -145,7 +154,10 @@ Do not load every linked page automatically.
 3. Read useful linked notes by their paths.
 4. If results are empty or incomplete, try fewer terms or alternate names.
 
-Search uses literal, case-insensitive keywords. Every term must occur somewhere in the note's path or content.
+Search uses an existing local index. Text mode ranks keyword matches with BM25.
+Hybrid mode combines BM25 with local embedding similarity. Results need not contain every query term.
+Changed, deleted, and unsafe sources are excluded, with warnings on stderr.
+If search reports a stale or missing index, ask the user before rebuilding it with `tmix index`.
 An empty result does not prove that the store has no relevant information.
 `--limit N` changes the result limit from 10 to a value between 1 and 100.
 Flags must precede positional arguments.
@@ -558,15 +570,16 @@ Flags must precede positional arguments. `--vault` works before or after the com
 
 ## Search
 
-Search matches literal, case-insensitive terms across each note's path and content. Every whitespace-separated query term must match somewhere in the note.
-
-Path and heading matches rank before body-only matches. Ties use alphabetical path order. Each result contains a path, line number, and snippet.
+Search ranks passages from the local index, then returns the best passage per note.
+Text mode uses BM25. Hybrid mode adds embedding similarity and reciprocal rank fusion.
+Quoted query terms use OR matching in FTS5. User input is text, not FTS syntax.
+Results need not contain every query term. Each result contains a path, line number, and original-Markdown snippet.
 
 Search returns at most 10 notes by default. `--limit` accepts 1–100. Snippets contain at most 240 characters plus a truncation marker.
 
-For path-only matches, the line number is 0. No matches produce empty text or an empty JSON array.
-
-Search excludes hidden files, hidden directories, symlinks, and non-Markdown files. It scans the vault on each call without an index.
+No matches produce empty text or an empty JSON array. Warnings go to stderr, not JSON output.
+Search excludes changed, deleted, and unsafe indexed sources. Read errors fail the operation.
+New notes remain undiscoverable until the next index build. Search never refreshes the index automatically.
 
 ## Link parsing
 

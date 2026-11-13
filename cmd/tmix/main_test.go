@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,7 +11,15 @@ import (
 
 func TestCLI(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	configPath := filepath.Join(configHome, "trailmix", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("[retrieval]\nruntime = \"/missing/llama-server\"\nmodel = \"/missing/model.gguf\"\nstate_dir = %q\n", t.TempDir())), 0600); err != nil {
+		t.Fatal(err)
+	}
 	root := filepath.Join(t.TempDir(), "vault")
 	invoke := func(input string, args ...string) (string, error) {
 		t.Helper()
@@ -30,9 +40,20 @@ func TestCLI(t *testing.T) {
 	if err != nil || out != "# Verification\nVPN database\nextra\n" {
 		t.Fatal(out, err)
 	}
+	if _, err = invoke("", "index"); err != nil {
+		t.Fatal(err)
+	}
 	out, err = invoke("", "search", "--json", "VPN database")
-	if err != nil || !strings.Contains(out, `"path":"preferences/verification.md"`) {
+	if err != nil || out != "[{\"path\":\"preferences/verification.md\",\"line\":2,\"snippet\":\"VPN database\"}]\n" {
 		t.Fatal(out, err)
+	}
+	if _, err = invoke("Changed source.\n", "append", "preferences/verification"); err != nil {
+		t.Fatal(err)
+	}
+	var staleOut, staleDiagnostics bytes.Buffer
+	err = run([]string{"--vault", root, "search", "--json", "VPN"}, strings.NewReader(""), &staleOut, &staleDiagnostics)
+	if err != nil || staleOut.String() != "[]\n" || !strings.Contains(staleDiagnostics.String(), "excluded changed note") || !strings.Contains(staleDiagnostics.String(), "no valid indexed matches remain") {
+		t.Fatalf("stale stdout=%q stderr=%q: %v", staleOut.String(), staleDiagnostics.String(), err)
 	}
 	if _, err := invoke("oops", "write", "preferences/verification"); err == nil {
 		t.Fatal("overwrite accepted")

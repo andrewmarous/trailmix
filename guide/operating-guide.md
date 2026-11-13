@@ -32,7 +32,10 @@ Do not load every linked page automatically.
 3. Read useful linked notes by their paths.
 4. If results are empty or incomplete, try fewer terms or alternate names.
 
-Search uses literal, case-insensitive keywords. Every term must occur somewhere in the note's path or content.
+Search uses an existing local index. Text mode ranks keyword matches with BM25.
+Hybrid mode combines BM25 with local embedding similarity. Results need not contain every query term.
+Changed, deleted, and unsafe sources are excluded, with warnings on stderr.
+If search reports a stale or missing index, ask the user before rebuilding it with `tmix index`.
 An empty result does not prove that the store has no relevant information.
 `--limit N` changes the result limit from 10 to a value between 1 and 100.
 Flags must precede positional arguments.
