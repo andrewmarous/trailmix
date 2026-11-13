@@ -3,12 +3,14 @@ package retrieval
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEmbeddingResponseReordersNormalizesAndRejectsInvalidVectors(t *testing.T) {
@@ -104,6 +106,49 @@ func TestRuntimeStartupFailureIncludesDiagnostics(t *testing.T) {
 	_, err := StartLlama(context.Background(), LlamaConfig{Executable: path, Model: "unused.gguf"})
 	if err == nil || !strings.Contains(err.Error(), "unsupported model architecture") {
 		t.Fatalf("startup failure: %v", err)
+	}
+}
+
+func TestCancelStartupAllowsGracefulRuntimeExit(t *testing.T) {
+	if os.PathSeparator == '\\' {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	path := dir + "/runtime"
+	script := fmt.Sprintf("#!/bin/sh\ntrap 'sleep 0.1; echo graceful > %q; exit 0' INT\necho ready > %q\nwhile :; do sleep 0.05; done\n", dir+"/stopped", dir+"/ready")
+	if err := os.WriteFile(path, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() {
+		_, err := StartLlama(ctx, LlamaConfig{Executable: path, Model: "unused.gguf"})
+		finished <- err
+	}()
+	deadline := time.After(8 * time.Second)
+	for {
+		if _, err := os.Stat(dir + "/ready"); err == nil {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("runtime did not start")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation: %v", err)
+		}
+	case <-deadline:
+		t.Fatal("startup cancellation did not finish")
+	}
+	body, err := os.ReadFile(dir + "/stopped")
+	if err != nil || string(body) != "graceful\n" {
+		t.Fatalf("runtime did not shut down gracefully: %q, %v", body, err)
 	}
 }
 

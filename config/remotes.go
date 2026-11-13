@@ -1,9 +1,11 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/pelletier/go-toml/v2"
@@ -12,11 +14,19 @@ import (
 // SaveRemotes replaces the legacy remote configuration on the next explicit
 // remote mutation. It canonicalizes TOML formatting; all typed settings survive.
 func Lock(path string) (func(), error) {
+	return LockContext(context.Background(), path)
+}
+
+// LockContext lets a CLI remote operation cancel while waiting for the lock.
+func LockContext(ctx context.Context, path string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
 	lock := flock.New(path + ".lock")
-	if err := lock.Lock(); err != nil {
+	if _, err := lock.TryLockContext(ctx, 25*time.Millisecond); err != nil {
 		return nil, err
 	}
 	return func() { _ = lock.Unlock() }, nil

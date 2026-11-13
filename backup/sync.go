@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,11 +14,19 @@ import (
 
 // Lock serializes CLI mutations with repository updates. External editors do not use it.
 func Lock(root string) (func(), error) {
+	return LockContext(context.Background(), root)
+}
+
+// LockContext allows a CLI operation to stop waiting for another writer.
+func LockContext(ctx context.Context, root string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return nil, err
 	}
 	l := flock.New(filepath.Join(root, ".tmx-operation.lock"))
-	if err := l.Lock(); err != nil {
+	if _, err := l.TryLockContext(ctx, 25*time.Millisecond); err != nil {
 		return nil, err
 	}
 	return func() { _ = l.Unlock() }, nil
@@ -81,6 +90,9 @@ func (g Git) Sync(root, remote string) error {
 		}
 	}
 	_, headErr := g.command(root, "rev-parse", "--verify", "HEAD")
+	if errors.Is(headErr, context.Canceled) || errors.Is(headErr, context.DeadlineExceeded) {
+		return headErr
+	}
 	if headErr != nil && hasRemote {
 		// Git refuses collisions with untracked local files. Never use reset --hard.
 		if _, err := g.command(root, "merge", "--ff-only", "refs/tmix/sync"); err != nil {
@@ -100,11 +112,21 @@ func (g Git) Sync(root, remote string) error {
 		}
 		defer os.RemoveAll(temp)
 		work := filepath.Join(temp, "vault")
+		defer func() {
+			// Cleanup must run even if add was interrupted, using its own deadline.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(g.context()), 5*time.Second)
+			defer cancel()
+			cleanup := g
+			cleanup.Context = ctx
+			_, _ = cleanup.command(root, "worktree", "remove", "--force", work)
+		}()
 		if _, err := g.command(root, "worktree", "add", "--detach", work, "HEAD"); err != nil {
 			return err
 		}
-		defer func() { _, _ = g.command(root, "worktree", "remove", "--force", work) }()
 		if _, err := g.command(work, "merge", "--no-edit", "refs/tmix/sync"); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			return fmt.Errorf("sync needs attention: remote changes could not merge; local memory is unchanged: %w", err)
 		}
 		merged, err := g.command(work, "rev-parse", "HEAD")
@@ -131,6 +153,9 @@ func (g Git) Sync(root, remote string) error {
 }
 
 func (g Git) syncSuccess(root, remote string) error {
+	if err := g.context().Err(); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(root, ".tmx-last-sync"), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0600); err != nil {
 		return err
 	}

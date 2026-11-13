@@ -85,8 +85,19 @@ Search rechecks embedding identity after inference, in case an index replacement
 
 Startup has a two-minute deadline. Requests have a two-minute deadline.
 Normal shutdown allows five seconds before forced termination.
-An uncatchable parent termination can leave a server process behind on platforms without parent-death handling.
-This draft does not claim crash-proof child cleanup.
+
+The CLI registers SIGINT and SIGTERM once, before command dispatch.
+The first signal cancels the operation context. Indexing stops current requests and starts no further batches.
+Uncommitted writes roll back. Completed vector batches remain reusable, and the previous complete index remains active.
+Cancellation reports an error on stderr and exits with status 130 after cleanup.
+A retry with `tmix index` resumes from the cached vectors.
+
+The runtime has a separate process group, so terminal signals do not bypass its owner.
+Cancellation and normal completion share one cleanup path: interrupt the runtime, wait up to five seconds, then kill if necessary.
+Cleanup waits for the child to exit and does not use the canceled request context.
+After the first signal, the CLI restores default signal handling.
+A second signal terminates immediately instead of waiting for cleanup.
+SIGKILL or a second signal can leave a runtime behind; this draft does not implement parent-death cleanup.
 
 ## Passage and index format
 
@@ -158,7 +169,11 @@ go test ./retrieval
 TMIX_TEST_LLAMA=/path/to/llama-server \
 TMIX_TEST_MODEL=/path/to/Qwen3-Embedding-0.6B-Q8_0.gguf \
   go test ./retrieval -run TestLiveQwenEmbeddings -v -count=1
+
+TMIX_TEST_LLAMA=/path/to/llama-server \
+TMIX_TEST_MODEL=/path/to/Qwen3-Embedding-0.6B-Q8_0.gguf \
+  go test ./cmd/tmix -run TestLiveIndexCancellation -v -count=1
 ```
 
 Ordinary tests use synthetic notes and deterministic vectors. They do not download models or make paid requests.
-The opt-in test starts real local inference and checks vector output and process cleanup.
+The opt-in checks start real local inference and check vector output, process cleanup, cancellation, and index recovery.

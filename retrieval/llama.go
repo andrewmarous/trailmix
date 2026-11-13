@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -62,6 +63,9 @@ func StartLlama(ctx context.Context, c LlamaConfig) (*Llama, error) {
 	if c.Executable == "" || c.Model == "" {
 		return nil, fmt.Errorf("embedding runtime and model paths are required")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// The server cannot inherit a listener. Authentication protects the brief
 	// close/bind race; readiness also verifies the child has not exited.
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
@@ -76,7 +80,9 @@ func StartLlama(ctx context.Context, c LlamaConfig) (*Llama, error) {
 	}
 	s := &Llama{key: hex.EncodeToString(key), endpoint: fmt.Sprintf("http://127.0.0.1:%d", port), done: make(chan struct{})}
 	s.client = &http.Client{Timeout: 2 * time.Minute, Transport: &http.Transport{Proxy: nil}}
-	s.cmd = exec.CommandContext(ctx, c.Executable, "--model", c.Model, "--embedding", "--pooling", "last", "--embd-normalize", "2", "--ctx-size", fmt.Sprint(embeddingContext), "--batch-size", fmt.Sprint(embeddingContext), "--ubatch-size", fmt.Sprint(embeddingContext), "--parallel", "1", "--host", "127.0.0.1", "--port", fmt.Sprint(port))
+	s.cmd = exec.Command(c.Executable, "--model", c.Model, "--embedding", "--pooling", "last", "--embd-normalize", "2", "--ctx-size", fmt.Sprint(embeddingContext), "--batch-size", fmt.Sprint(embeddingContext), "--ubatch-size", fmt.Sprint(embeddingContext), "--parallel", "1", "--host", "127.0.0.1", "--port", fmt.Sprint(port))
+	// Terminal signals reach the CLI, which owns cancellation and child cleanup.
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	for _, e := range os.Environ() {
 		if !strings.HasPrefix(e, "LLAMA_") {
 			s.cmd.Env = append(s.cmd.Env, e)
@@ -90,6 +96,15 @@ func StartLlama(ctx context.Context, c LlamaConfig) (*Llama, error) {
 		return nil, fmt.Errorf("start embedding runtime: %w", err)
 	}
 	go func() { s.waitErr = s.cmd.Wait(); close(s.done) }()
+	// Cancellation and explicit cleanup share one graceful shutdown. The default
+	// CommandContext cancellation would kill the runtime before it can unwind.
+	go func() {
+		select {
+		case <-ctx.Done():
+			s.Close()
+		case <-s.done:
+		}
+	}()
 	ready, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -97,6 +112,9 @@ func StartLlama(ctx context.Context, c LlamaConfig) (*Llama, error) {
 	for {
 		select {
 		case <-s.done:
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			return nil, fmt.Errorf("embedding runtime exited during startup: %v\n%s", s.waitErr, s.log.String())
 		case <-ready.Done():
 			s.Close()

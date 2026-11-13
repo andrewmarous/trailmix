@@ -8,9 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 
 	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/retrieval"
@@ -49,7 +47,7 @@ func retrievalRuntime(c config.Retrieval) (retrieval.LlamaConfig, error) {
 	return retrieval.LlamaConfig{Executable: executable, Model: c.Model}, nil
 }
 
-func runSearch(v *vault.Vault, c config.Retrieval, query string, limit int, jsonOutput bool, out, diagnostics io.Writer) error {
+func runSearch(ctx context.Context, v *vault.Vault, c config.Retrieval, query string, limit int, jsonOutput bool, out, diagnostics io.Writer) error {
 	database, err := retrievalDatabase(v, c.StateDir)
 	if err != nil {
 		return err
@@ -58,8 +56,6 @@ func runSearch(v *vault.Vault, c config.Retrieval, query string, limit int, json
 	if err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	report, err := retrieval.Search(ctx, v, retrieval.SearchOptions{Database: database, Mode: c.Mode, Query: query, Limit: limit, Runtime: runtime})
 	if err != nil {
 		return err

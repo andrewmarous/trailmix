@@ -39,7 +39,22 @@ type embedder interface {
 	Close()
 }
 
-func fileHash(path string) (string, error) {
+type cancelReader struct {
+	ctx context.Context
+	io.Reader
+}
+
+func (r cancelReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.Reader.Read(p)
+}
+
+func fileHash(ctx context.Context, path string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -53,7 +68,7 @@ func fileHash(path string) (string, error) {
 		return "", fmt.Errorf("not a regular file: %s", path)
 	}
 	h := sha256.New()
-	if _, err = io.Copy(h, f); err != nil {
+	if _, err = io.Copy(h, cancelReader{ctx, f}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
@@ -69,7 +84,7 @@ func Index(ctx context.Context, v *vault.Vault, o IndexOptions) (IndexReport, er
 	if o.Mode != "" && o.Mode != "hybrid" {
 		return IndexReport{}, fmt.Errorf("retrieval mode must be hybrid or text")
 	}
-	identity, err := runtimeIdentity(o.Runtime)
+	identity, err := runtimeIdentity(ctx, o.Runtime)
 	if err != nil {
 		return IndexReport{}, err
 	}
@@ -78,12 +93,12 @@ func Index(ctx context.Context, v *vault.Vault, o IndexOptions) (IndexReport, er
 
 const textIdentity = "text:" + passageFormat
 
-func runtimeIdentity(c LlamaConfig) (string, error) {
-	model, err := fileHash(c.Model)
+func runtimeIdentity(ctx context.Context, c LlamaConfig) (string, error) {
+	model, err := fileHash(ctx, c.Model)
 	if err != nil {
 		return "", fmt.Errorf("embedding model: %w", err)
 	}
-	runtime, err := fileHash(c.Executable)
+	runtime, err := fileHash(ctx, c.Executable)
 	if err != nil {
 		return "", fmt.Errorf("embedding runtime: %w", err)
 	}
@@ -110,7 +125,7 @@ func privatePath(path string) error {
 	return nil
 }
 
-func openIndex(path string) (*sql.DB, error) {
+func openIndexContext(ctx context.Context, path string) (*sql.DB, error) {
 	u := url.URL{Scheme: "file", Path: path}
 	q := u.Query()
 	q.Set("_pragma", "busy_timeout(5000)")
@@ -122,11 +137,11 @@ func openIndex(path string) (*sql.DB, error) {
 	db.SetMaxOpenConns(1)
 	// Reject unrelated databases before making any schema changes.
 	var application, version, tables int
-	if err = db.QueryRow("PRAGMA application_id").Scan(&application); err == nil {
-		err = db.QueryRow("PRAGMA user_version").Scan(&version)
+	if err = db.QueryRowContext(ctx, "PRAGMA application_id").Scan(&application); err == nil {
+		err = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
 	}
 	if err == nil && application == 0 {
-		err = db.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").Scan(&tables)
+		err = db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").Scan(&tables)
 	}
 	if err != nil {
 		db.Close()
@@ -141,12 +156,12 @@ func openIndex(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("unsupported retrieval schema version %d", version)
 	}
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	_, err = tx.Exec(`
+	_, err = tx.ExecContext(ctx, `
  CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS embeddings (model TEXT NOT NULL, hash TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(model,hash));
  CREATE TABLE IF NOT EXISTS passages (id INTEGER PRIMARY KEY, path TEXT NOT NULL, line INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, start_byte INTEGER NOT NULL DEFAULT 0, end_byte INTEGER NOT NULL DEFAULT 0, end_line INTEGER NOT NULL DEFAULT 0, source_hash TEXT NOT NULL DEFAULT '', section_start INTEGER NOT NULL DEFAULT 0, section_end INTEGER NOT NULL DEFAULT 0);
@@ -160,7 +175,7 @@ func openIndex(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	if version == 1 && err == nil {
-		_, err = tx.Exec(`ALTER TABLE passages ADD COLUMN start_byte INTEGER NOT NULL DEFAULT 0;
+		_, err = tx.ExecContext(ctx, `ALTER TABLE passages ADD COLUMN start_byte INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE passages ADD COLUMN end_byte INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE passages ADD COLUMN end_line INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE passages ADD COLUMN source_hash TEXT NOT NULL DEFAULT '';
@@ -180,6 +195,9 @@ func openIndex(path string) (*sql.DB, error) {
 }
 
 func build(ctx context.Context, v *vault.Vault, path, identity string, start func(context.Context) (embedder, error)) (report IndexReport, err error) {
+	if err = ctx.Err(); err != nil {
+		return report, err
+	}
 	if path == "" {
 		return report, fmt.Errorf("index database path is required")
 	}
@@ -229,7 +247,7 @@ func build(ctx context.Context, v *vault.Vault, path, identity string, start fun
 	if err = os.Chmod(path, 0600); err != nil {
 		return report, err
 	}
-	db, e := openIndex(path)
+	db, e := openIndexContext(ctx, path)
 	if e != nil {
 		return report, e
 	}
@@ -245,7 +263,7 @@ func build(ctx context.Context, v *vault.Vault, path, identity string, start fun
 	if _, err = db.ExecContext(ctx, "INSERT OR IGNORE INTO metadata(key,value) VALUES('vault',?)", root); err != nil {
 		return report, err
 	}
-	sources, snapshot, e := collect(v)
+	sources, snapshot, e := collect(ctx, v)
 	if e != nil {
 		return report, e
 	}
@@ -267,10 +285,15 @@ func build(ctx context.Context, v *vault.Vault, path, identity string, start fun
 		}
 	}()
 	ensureRuntime := func() error {
-		if runtime == nil {
-			runtime, err = start(ctx)
+		if runtime != nil {
+			return nil
 		}
-		return err
+		started, e := start(ctx)
+		if e != nil {
+			return e
+		}
+		runtime = started
+		return nil
 	}
 	fits := func(ctx context.Context, input string) (bool, error) {
 		if identity == textIdentity {
@@ -362,7 +385,7 @@ func build(ctx context.Context, v *vault.Vault, path, identity string, start fun
 		report.Embedded += len(pending)
 	}
 	// A concurrent edit invalidates activation, but cached vectors remain reusable.
-	_, current, e := collect(v)
+	_, current, e := collect(ctx, v)
 	if e != nil {
 		return report, e
 	}

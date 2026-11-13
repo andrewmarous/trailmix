@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 
 	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/learning"
@@ -40,7 +38,7 @@ func runConfig(args []string, path string, out io.Writer) error {
 		return fmt.Errorf("unknown config command %q", args[0])
 	}
 }
-func runAutomation(args []string, root string, c config.Config, configPath string, out, diagnostics io.Writer) error {
+func runAutomation(ctx context.Context, args []string, root string, c config.Config, configPath string, out, diagnostics io.Writer) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -51,8 +49,6 @@ func runAutomation(args []string, root string, c config.Config, configPath strin
 	}
 	configuredVault := c.Vault.Path
 	c.Vault.Path = root
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	switch args[0] {
 	case "run":
 		if len(args) != 1 {

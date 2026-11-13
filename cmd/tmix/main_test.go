@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
+	return runCommand(context.Background(), args, in, out, diagnostics)
+}
 
 func TestCLI(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())

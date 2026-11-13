@@ -38,7 +38,10 @@ type section struct {
 
 func hash(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
 
-func collect(v *vault.Vault) ([]sourceNote, string, error) {
+func collect(ctx context.Context, v *vault.Vault) ([]sourceNote, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
 	info, err := os.Lstat(v.Root)
 	if err != nil {
 		return nil, "", err
@@ -49,6 +52,9 @@ func collect(v *vault.Vault) ([]sourceNote, string, error) {
 	var notes []sourceNote
 	digest := sha256.New()
 	err = filepath.WalkDir(v.Root, func(path string, d fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -80,6 +86,9 @@ func collect(v *vault.Vault) ([]sourceNote, string, error) {
 		}
 		rel = filepath.ToSlash(rel)
 		body, e := v.Read(rel)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if e != nil {
 			return e
 		}

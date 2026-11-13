@@ -12,6 +12,10 @@ import (
 	"github.com/andrewmarous/trailmix/vault"
 )
 
+func openIndex(path string) (*sql.DB, error) {
+	return openIndexContext(context.Background(), path)
+}
+
 type fakeEmbedder struct {
 	closed bool
 	inputs []string

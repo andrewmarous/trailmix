@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -34,7 +35,7 @@ Source overrides apply only to this scan/begin. All output is JSON.
 This command tracks review progress; it does not run a model or publish notes.
 `
 
-func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, configured config.Sources) error {
+func runSessions(ctx context.Context, args []string, in io.Reader, out, diagnostics io.Writer, configured config.Sources) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -102,6 +103,9 @@ func runSessions(args []string, in io.Reader, out, diagnostics io.Writer, config
 	var operationErr error
 	store := learning.Store{Dir: *state}
 	err = store.Transaction(func(r *learning.Registry) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if action == "scan" || action == "begin" {
 			sources := learning.ConfiguredSources(configured)
 			for i := range sources {

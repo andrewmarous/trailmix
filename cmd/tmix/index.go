@@ -7,15 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/andrewmarous/trailmix/config"
 	"github.com/andrewmarous/trailmix/retrieval"
 	"github.com/andrewmarous/trailmix/vault"
 )
 
-func runIndex(args []string, root string, cfg config.Retrieval, out, diagnostics io.Writer) error {
+func runIndex(ctx context.Context, args []string, root string, cfg config.Retrieval, out, diagnostics io.Writer) error {
 	flags := flag.NewFlagSet("index", flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
 	flags.StringVar(&root, "vault", root, "Markdown vault directory")
@@ -50,8 +48,6 @@ func runIndex(args []string, root string, cfg config.Retrieval, out, diagnostics
 	if err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	report, err := retrieval.Index(ctx, v, retrieval.IndexOptions{Mode: cfg.Mode, Database: database, Runtime: runtime})
 	if err != nil {
 		return err

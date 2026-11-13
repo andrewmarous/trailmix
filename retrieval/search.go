@@ -38,7 +38,7 @@ type candidate struct {
 
 // Search reads an existing index. It never builds, migrates, or repairs one.
 func Search(ctx context.Context, v *vault.Vault, o SearchOptions) (SearchReport, error) {
-	return search(ctx, v, o, func() (string, error) { return runtimeIdentity(o.Runtime) }, func(ctx context.Context) (embedder, error) { return StartLlama(ctx, o.Runtime) })
+	return search(ctx, v, o, func() (string, error) { return runtimeIdentity(ctx, o.Runtime) }, func(ctx context.Context) (embedder, error) { return StartLlama(ctx, o.Runtime) })
 }
 
 func openSearchIndex(ctx context.Context, path string) (*sql.DB, error) {

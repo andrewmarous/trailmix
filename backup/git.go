@@ -12,12 +12,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
 var errNoContent = errors.New("vault has no committed content to back up")
 
 type Git struct {
+	// Context is scoped to this CLI operation; nil uses a background context.
+	Context     context.Context
 	Remotes     map[string]string
 	SaveRemotes func(map[string]string) error
 	AppConfig   string
@@ -25,10 +28,21 @@ type Git struct {
 	Out, Err    io.Writer
 }
 
+func (g Git) context() context.Context {
+	if g.Context != nil {
+		return g.Context
+	}
+	return context.Background()
+}
+
 func (g Git) command(dir string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(g.context(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	// Include Git's SSH/transport children in cancellation, not just Git itself.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
 	cmd.Dir = dir
 	// Do not allow inherited Git overrides to redirect vault operations.
 	for _, e := range os.Environ() {
@@ -40,6 +54,12 @@ func (g Git) command(dir string, args ...string) ([]byte, error) {
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	data, err := cmd.Output()
+	if ctx.Err() != nil {
+		if cmd.Process != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		err = errors.Join(ctx.Err(), err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("git %s: %s: %w", args[0], strings.TrimSpace(stderr.String()), err)
 	}
@@ -271,6 +291,9 @@ func (g Git) snapshot(root string) error {
 		}
 	}
 	if _, err := g.command(root, "rev-parse", "--verify", "HEAD"); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
 		return errNoContent
 	}
 	return nil

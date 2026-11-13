@@ -8,9 +8,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/andrewmarous/trailmix/backup"
 	"github.com/andrewmarous/trailmix/config"
@@ -60,14 +62,34 @@ Commands:
 Flags must precede positional arguments. --vault also works after COMMAND.
 `
 
-func main() {
-	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+func main() { os.Exit(runMain()) }
+
+func runMain() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	input := newCLIInput(os.Stdin)
+	defer input.Close()
+	go func() {
+		<-ctx.Done()
+		stop()        // A second signal uses the default termination behavior.
+		input.Close() // Unblock only CLI-owned input, never caller-supplied readers.
+	}()
+	if err := runCommand(ctx, os.Args[1:], input, os.Stdout, os.Stderr); err != nil {
+		if ctx.Err() != nil {
+			fmt.Fprintln(os.Stderr, "tmix: operation canceled:", err)
+			return 130
+		}
 		fmt.Fprintln(os.Stderr, "tmix:", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
-func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
+func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnostics io.Writer) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	in = commandInput{ctx, in}
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
 		_, err := fmt.Fprintf(out, "tmix %s (commit %s, built %s)\n", version, commit, date)
 		return err
@@ -106,7 +128,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		if flags.NArg() != 0 {
 			return fmt.Errorf("update takes no positional arguments")
 		}
-		return update.Run(context.Background(), version, *check, out)
+		return update.Run(ctx, version, *check, out)
 	}
 	*configPath, err = filepath.Abs(config.Expand(*configPath, home))
 	if err != nil {
@@ -136,10 +158,10 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	if command == "learning" {
-		return runLearning(args[1:], *root, cfg, *configPath, in, out, diagnostics)
+		return runLearning(ctx, args[1:], *root, cfg, *configPath, in, out, diagnostics)
 	}
 	if command == "index" {
-		return runIndex(args[1:], *root, cfg.Retrieval, out, diagnostics)
+		return runIndex(ctx, args[1:], *root, cfg.Retrieval, out, diagnostics)
 	}
 	switch command {
 	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
@@ -210,7 +232,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	}
 	if command == "write" || command == "append" || command == "backup" || command == "sync" {
-		unlock, err := backup.Lock(v.Root)
+		unlock, err := backup.LockContext(ctx, v.Root)
 		if err != nil {
 			return err
 		}
@@ -225,9 +247,9 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		if cfg.Remotes == nil && *configPath != filepath.Clean(config.Path(home)) {
 			cfg.Remotes = map[string]string{}
 		}
-		g := backup.Git{Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Remotes: cfg.Remotes, SaveRemotes: func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes) }, AppConfig: *configPath, Out: out, Err: diagnostics}
+		g := backup.Git{Context: ctx, Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Remotes: cfg.Remotes, SaveRemotes: func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes) }, AppConfig: *configPath, Out: out, Err: diagnostics}
 		if command == "remote" {
-			unlock, err := config.Lock(*configPath)
+			unlock, err := config.LockContext(ctx, *configPath)
 			if err != nil {
 				return err
 			}
@@ -353,6 +375,9 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		return err
 	case "write", "append":
 		data, err := io.ReadAll(io.LimitReader(in, 16*1024*1024+1))
+		if canceled := ctx.Err(); canceled != nil {
+			return canceled
+		}
 		if err != nil {
 			return err
 		}
@@ -366,7 +391,7 @@ func run(args []string, in io.Reader, out, diagnostics io.Writer) error {
 		}
 		return err
 	case "search":
-		return runSearch(v, cfg.Retrieval, strings.Join(positional, " "), limit, jsonOutput, out, diagnostics)
+		return runSearch(ctx, v, cfg.Retrieval, strings.Join(positional, " "), limit, jsonOutput, out, diagnostics)
 	}
 	return nil
 }

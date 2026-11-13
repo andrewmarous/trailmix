@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 	"github.com/andrewmarous/trailmix/learning"
 )
 
-func runLearning(args []string, root string, cfg config.Config, configPath string, in io.Reader, out, diagnostics io.Writer) error {
+func runLearning(ctx context.Context, args []string, root string, cfg config.Config, configPath string, in io.Reader, out, diagnostics io.Writer) error {
 	flags := flag.NewFlagSet("learning", flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
 	flags.StringVar(&root, "vault", root, "vault directory")
@@ -28,9 +29,9 @@ func runLearning(args []string, root string, cfg config.Config, configPath strin
 	}
 	switch args[0] {
 	case "run", "doctor", "schedule", "accept", "navigation":
-		return runAutomation(args, root, cfg, configPath, out, diagnostics)
+		return runAutomation(ctx, args, root, cfg, configPath, out, diagnostics)
 	case "sessions":
-		return runSessions(append([]string{"--state-dir", cfg.Learning.StateDir}, args[1:]...), in, out, diagnostics, cfg.Learning.Sources)
+		return runSessions(ctx, append([]string{"--state-dir", cfg.Learning.StateDir}, args[1:]...), in, out, diagnostics, cfg.Learning.Sources)
 	case "add":
 		flags := flag.NewFlagSet("learning add", flag.ContinueOnError)
 		flags.SetOutput(diagnostics)
@@ -45,6 +46,9 @@ func runLearning(args []string, root string, cfg config.Config, configPath strin
 			return fmt.Errorf("usage: tmix learning add [--overwrite] NOTE < guidance.md")
 		}
 		content, err := io.ReadAll(io.LimitReader(in, 64*1024+1))
+		if canceled := ctx.Err(); canceled != nil {
+			return canceled
+		}
 		if err != nil {
 			return err
 		}

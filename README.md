@@ -92,6 +92,14 @@ These are manual setup instructions, not a promise of automated integration test
 Ask the agent: "Search Trailmix for the retry policy and report the note path. Do not save anything."
 The agent must find `decisions/retries.md`. Run `tmix instructions` to read the memory policy directly.
 
+## Cancel a command
+
+Press Ctrl-C once, or send SIGTERM, to cancel indexing, search, Git backup/sync, or commands that wait for stdin.
+These operations share one CLI cancellation context. Canceled stdin commands do not save partial input.
+Git operations stop their transport children and attempt bounded cleanup of temporary worktrees.
+Cancellation does not undo completed commits, accepted remote pushes, or cached embedding batches.
+The CLI exits with status 130 after cancellation cleanup. A second signal terminates immediately and can skip cleanup.
+
 ## Upgrade and uninstall
 
 For Homebrew, run `brew update` and then `brew upgrade trailmix`.
