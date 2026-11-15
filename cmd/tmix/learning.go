@@ -28,7 +28,7 @@ func runLearning(ctx context.Context, args []string, root string, cfg config.Con
 		return err
 	}
 	switch args[0] {
-	case "run", "doctor", "schedule", "accept", "navigation":
+	case "run", "doctor", "schedule", "accept", "navigation", "consolidate", "consolidation":
 		return runAutomation(ctx, args, root, cfg, configPath, out, diagnostics)
 	case "sessions":
 		return runSessions(ctx, append([]string{"--state-dir", cfg.Learning.StateDir}, args[1:]...), in, out, diagnostics, cfg.Learning.Sources)

@@ -35,7 +35,10 @@ Commands:
   learning add [--overwrite] NOTE
                                 Publish manual guidance from stdin without a proposal
   learning sessions help        Discover Pi/Codex sessions and track reviewed turns
-  learning run                  Run learning and navigation with Pi or Codex
+  learning run                  Run learning, consolidation, and navigation
+  learning consolidate [NOTE...] Consolidate notes and inspect cited evidence
+  learning consolidation discard RUN
+                                Discard a consolidation run and retain queued work
   learning navigation build     Rebuild memory maps using the learning policy
   learning navigation discard RUN
                                 Discard a map proposal and leave maintenance pending

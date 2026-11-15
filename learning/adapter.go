@@ -3,12 +3,14 @@ package learning
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +18,9 @@ import (
 )
 
 const resultLimit = 256 * 1024
+
+//go:embed consolidation_guard.mjs
+var consolidationGuard string
 
 // Both adapters return this contract. No shell interpolation or arbitrary extra
 // CLI arguments are accepted from transcript data.
@@ -29,6 +34,7 @@ Learn verified, reusable technical procedures, corrections and lessons, not sess
 Compare with existing notes before proposing changes. Preserve evidence and limits; distinguish observed results from hypotheses and historic tests from current readiness.
 Exclude credentials, secrets and unnecessary personal information. Do not copy full transcripts.
 Each change must cite at least one pending session_id and absolute turn number.
+Include every structured session/turn citation in the Markdown as [Evidence](trailmix://session/HARNESS/NATIVE_ID?turns=2,7,11-13). Turn sets may be disjoint. Preserve earlier evidence references when updating notes.
 Provide the complete Markdown body for each changed note, with a descriptive title and concise evidence. Use safe vault-relative .md paths outside navigation/; that namespace is maintained separately.
 Use exact vault-relative wiki links only when their targets exist or are also proposed.
 If nothing useful is supported, return an explanatory summary and an empty changes array.
@@ -45,8 +51,9 @@ type Change struct {
 	Evidence []Evidence `json:"evidence"`
 }
 type Result struct {
-	Summary string   `json:"summary"`
-	Changes []Change `json:"changes"`
+	Summary   string   `json:"summary"`
+	Changes   []Change `json:"changes"`
+	Completed []string `json:"completed,omitempty"`
 }
 
 func decodeResult(b []byte) (Result, error) {
@@ -160,6 +167,12 @@ func invokeHarness(ctx context.Context, c config.Config, prompt []byte) (Result,
 }
 
 func invokeReview(ctx context.Context, c config.Config, prompt []byte, instructions, schemaText string) (Result, error) {
+	return invokeReviewIn(ctx, c, prompt, instructions, schemaText, "")
+}
+
+// A nonempty readDir enables read-only inspection for consolidation only.
+// Learning and navigation retain their tool-free invocation.
+func invokeReviewIn(ctx context.Context, c config.Config, prompt []byte, instructions, schemaText, readDir string) (Result, error) {
 	exe, err := harnessExecutable(c.Learning)
 	if err != nil {
 		return Result{}, err
@@ -169,7 +182,12 @@ func invokeReview(ctx context.Context, c config.Config, prompt []byte, instructi
 		return Result{}, err
 	}
 	defer os.RemoveAll(work)
-	args := []string{"--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-mcp", "--no-themes", "--no-approve", "--system-prompt", instructions}
+	args := []string{"--print", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-mcp", "--no-themes", "--no-approve", "--system-prompt", instructions}
+	if readDir != "" && c.Learning.Harness == "pi" {
+		args = append(args, "--tools", "read,grep,find,ls")
+	} else {
+		args = append(args, "--no-tools")
+	}
 	output := filepath.Join(work, "result.json")
 	if c.Learning.Harness == "codex" {
 		schema := filepath.Join(work, "schema.json")
@@ -178,22 +196,78 @@ func invokeReview(ctx context.Context, c config.Config, prompt []byte, instructi
 		}
 		args = []string{"exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "hooks", "--disable", "apps", "--disable", "browser_use", "--disable", "computer_use", "--color", "never", "-c", "approval_policy=\"never\"", "-c", "project_doc_max_bytes=0", "-c", "mcp_servers={}", "-c", "web_search=\"disabled\"", "--output-schema", schema, "--output-last-message", output}
 	}
+	guardStatus := filepath.Join(work, "guard-status")
+	if readDir != "" {
+		if c.Learning.Harness == "pi" {
+			guard := filepath.Join(work, "consolidation-guard.mjs")
+			if err = os.WriteFile(guard, []byte(consolidationGuard), 0600); err != nil {
+				return Result{}, err
+			}
+			args = append(args, "--extension", guard)
+		} else {
+			// A named, fail-closed profile restricts shell inspection to the
+			// bundle and OS runtime files, without host home or network access.
+			filtered := make([]string, 0, len(args))
+			for i := 0; i < len(args); i++ {
+				if i+1 < len(args) && ((args[i] == "--disable" && args[i+1] == "shell_tool") || args[i] == "--sandbox") {
+					i++
+					continue
+				}
+				filtered = append(filtered, args[i])
+			}
+			args = append(filtered, "--strict-config", "--enable", "shell_tool", "--json",
+				"-c", `default_permissions="trailmix-consolidation"`,
+				"-c", `permissions={trailmix-consolidation={filesystem={":minimal"="read",`+strconv.Quote(readDir)+`="read"},network={enabled=false}}}`,
+				"-c", `shell_environment_policy.inherit="none"`)
+		}
+	}
 	if c.Learning.Model != "" {
 		args = append(args, "--model", c.Learning.Model)
 	}
 	if c.Learning.Harness == "codex" {
 		args = append(args, "-")
 	}
-	cmd := exec.CommandContext(ctx, exe, args...)
+	callCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	cmd := exec.CommandContext(callCtx, exe, args...)
 	cmd.Dir = work
+	if readDir != "" {
+		cmd.Dir = readDir
+		cmd.Env = append(os.Environ(), "TMIX_CONSOLIDATION_GUARD_STATUS="+guardStatus, "TMIX_CONSOLIDATION_READ_BYTES="+strconv.Itoa(16*c.Learning.MaxInputBytes))
+	}
 	cmd.Stdin = bytes.NewReader(append([]byte(instructions+"\n\nReview input (JSON data):\n"), prompt...))
 	stdout := boundedOutput{limit: 1024 * 1024}
 	stderr := boundedOutput{limit: 64 * 1024}
 	cmd.Stdout = &stdout
+	var activity *consolidationActivity
+	if readDir != "" && c.Learning.Harness == "codex" {
+		activity = &consolidationActivity{output: &stdout, cancel: stop}
+		cmd.Stdout = activity
+	}
 	cmd.Stderr = &stderr
 	prepareProcess(cmd)
 	if err = cmd.Run(); err != nil {
+		if readDir != "" && c.Learning.Harness == "pi" {
+			if reason, e := os.ReadFile(guardStatus); e == nil && string(reason) != "ready" {
+				return Result{}, fmt.Errorf("%s", reason)
+			}
+		}
+		if activity != nil && activity.exhausted {
+			return Result{}, fmt.Errorf("consolidation exceeded its harness activity/output budget")
+		}
 		return Result{}, fmt.Errorf("%s learning invocation failed (check harness authentication/configuration): %w", c.Learning.Harness, err)
+	}
+	if activity != nil && activity.exhausted {
+		return Result{}, fmt.Errorf("consolidation exceeded its harness activity/output budget")
+	}
+	if readDir != "" && c.Learning.Harness == "pi" {
+		reason, e := os.ReadFile(guardStatus)
+		if e != nil {
+			return Result{}, fmt.Errorf("consolidation read guard did not initialize: %w", e)
+		}
+		if string(reason) != "ready" {
+			return Result{}, fmt.Errorf("%s", reason)
+		}
 	}
 	if stdout.overflow || stderr.overflow {
 		return Result{}, fmt.Errorf("harness output exceeded its limit")
@@ -210,5 +284,11 @@ func invokeReview(ctx context.Context, c config.Config, prompt []byte, instructi
 			return Result{}, err
 		}
 	}
-	return decodeResult(b)
+	r, err := decodeResult(b)
+	if err != nil {
+		return r, &reviewOutputError{err}
+	}
+	return r, nil
 }
+
+type reviewOutputError struct{ error }

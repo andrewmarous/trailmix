@@ -58,7 +58,20 @@ while [ "$#" -gt 0 ]; do
  if [ "$1" = "--output-last-message" ]; then shift; output="$1"; fi
  shift
 done
-cat > '` + filepath.Join(home, "input.json") + `'
+cat > '` + filepath.Join(home, "request.json") + `'
+if grep -q '"task":"consolidation"' '` + filepath.Join(home, "request.json") + `'; then
+ if [ -n "$TMIX_CONSOLIDATION_GUARD_STATUS" ]; then printf ready > "$TMIX_CONSOLIDATION_GUARD_STATUS"; fi
+ cp '` + filepath.Join(home, "request.json") + `' '` + filepath.Join(home, "consolidation-input.json") + `'
+ result='` + filepath.Join(home, "consolidation-response.json") + `'
+ if [ ! -f "$result" ]; then
+  completed=$(grep -o '"[^"]*\.md":"[a-f0-9]*"' '` + filepath.Join(home, "request.json") + `' | cut -d: -f1 | paste -sd, -)
+  printf '{"summary":"No consolidation needed.","changes":[],"completed":[%s]}' "$completed" > '` + filepath.Join(home, "consolidation-default.json") + `'
+  result='` + filepath.Join(home, "consolidation-default.json") + `'
+ fi
+ if [ -n "$output" ]; then cp "$result" "$output"; else cat "$result"; fi
+ exit 0
+fi
+cp '` + filepath.Join(home, "request.json") + `' '` + filepath.Join(home, "input.json") + `'
 result='` + resultFile + `'
 if grep -q '"task":"navigation"' '` + filepath.Join(home, "input.json") + `'; then
  result='` + filepath.Join(home, "navigation-response.json") + `'
@@ -93,7 +106,7 @@ func assertReviewed(t *testing.T, c config.Config, count int) {
 	}
 }
 func lessonResult() Result {
-	return Result{Summary: "Verified retry procedure.", Changes: []Change{{Path: "procedures/retry.md", Content: "# Retry transient failures\n\nRetry only verified transient failures.\n", Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}}}}}
+	return Result{Summary: "Verified retry procedure.", Changes: []Change{{Path: "procedures/retry.md", Content: "# Retry transient failures\n\nRetry only verified transient failures.\n\n[Evidence](trailmix://session/pi/p?turns=1)\n", Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}}}}}
 }
 func TestWorkerDrainsAllSessionsInBatches(t *testing.T) {
 	c, _ := workerFixture(t, "pi", "automatic")
@@ -199,7 +212,7 @@ func TestRecoversDurablePartiallyPublishedResult(t *testing.T) {
 	}
 	result := lessonResult()
 	result.Changes[0].Content += "\n[[procedures/backoff]]\n"
-	result.Changes = append(result.Changes, Change{Path: "procedures/backoff.md", Content: "# Backoff\n\nWait between retries.\n", Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}}})
+	result.Changes = append(result.Changes, Change{Path: "procedures/backoff.md", Content: "# Backoff\n\nWait between retries.\n\n[Evidence](trailmix://session/pi/p?turns=1)\n", Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}}})
 	proposal, err := makeProposal(c, runID, result, packets, map[string]string{})
 	if err != nil {
 		t.Fatal(err)

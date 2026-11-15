@@ -59,6 +59,20 @@ func runAutomation(ctx context.Context, args []string, root string, c config.Con
 			err = e
 		}
 		return err
+	case "consolidate":
+		status, err := learning.Consolidate(ctx, c, args[1:])
+		if e := json.NewEncoder(out).Encode(status); err == nil {
+			err = e
+		}
+		return err
+	case "consolidation":
+		if len(args) != 3 || args[1] != "discard" {
+			return fmt.Errorf("usage: tmix learning consolidation discard RUN")
+		}
+		if err := learning.DiscardConsolidation(c, args[2]); err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(map[string]string{"status": "consolidation_pending", "run_id": args[2]})
 	case "navigation":
 		if len(args) == 2 && args[1] == "build" {
 			status, err := learning.BuildNavigation(ctx, c)

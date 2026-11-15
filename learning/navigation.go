@@ -420,6 +420,13 @@ func BuildNavigation(ctx context.Context, c config.Config) (JobStatus, error) {
 	}); err != nil {
 		return JobStatus{}, err
 	}
+	s, err := loadConsolidationState(c)
+	if err != nil {
+		return JobStatus{}, err
+	}
+	if s.Active != nil {
+		return JobStatus{}, fmt.Errorf("finish or discard consolidation %s before rebuilding navigation", s.Active.ID)
+	}
 	status := JobStatus{Status: "completed"}
 	err = maintainNavigation(ctx, c, &status, true)
 	if err != nil {

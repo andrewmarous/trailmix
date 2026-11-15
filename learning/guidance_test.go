@@ -12,7 +12,7 @@ func TestGuidanceValidatesWholeBatchBeforePublishing(t *testing.T) {
 	result := lessonResult()
 	result.Changes[0].Content += "\n[[procedures/details]]\n"
 	result.Changes = append(result.Changes, Change{
-		Path: "procedures/details.md", Content: "# Details\n\n[[missing]]\n",
+		Path: "procedures/details.md", Content: "# Details\n\n[[missing]]\n\n[Evidence](trailmix://session/pi/p?turns=1)\n",
 		Evidence: []Evidence{{SessionID: "pi/p", Turn: 1}},
 	})
 	setResponse(t, response, result)
@@ -25,7 +25,7 @@ func TestGuidanceValidatesWholeBatchBeforePublishing(t *testing.T) {
 			t.Fatalf("published part of an invalid batch: %s %v", name, err)
 		}
 	}
-	result.Changes[1].Content = "# Details\n\n[[procedures/retry]]\n"
+	result.Changes[1].Content = "# Details\n\n[[procedures/retry]]\n\n[Evidence](trailmix://session/pi/p?turns=1)\n"
 	// The saved proposal is the durable result. Repair it without another model call.
 	var id string
 	if err := (Store{Dir: c.Learning.StateDir}).Transaction(func(r *Registry) error {

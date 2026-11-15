@@ -106,8 +106,24 @@ func publishGuidance(root string, changes []Change, expected map[string]string) 
 			return err
 		}
 	}
-	// Link resolution needs attachment names, not their bodies.
-	if err = filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
+	if err = stageAttachmentNames(root, stage); err != nil {
+		return err
+	}
+	// Navigate validates every link in the staged vault, regardless of this name.
+	if _, err = staged.Navigate(changes[0].Path); err != nil {
+		return fmt.Errorf("guidance links invalid: %w", err)
+	}
+	for _, change := range changes {
+		if err = real.WriteIfUnchanged(change.Path, []byte(change.Content), expected[change.Path]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Link resolution needs attachment names, not their bodies.
+func stageAttachmentNames(root, stage string) error {
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
 		if e != nil {
 			return e
 		}
@@ -136,17 +152,5 @@ func publishGuidance(root string, changes []Change, expected map[string]string) 
 			return e
 		}
 		return os.WriteFile(target, nil, 0600)
-	}); err != nil {
-		return err
-	}
-	// Navigate validates every link in the staged vault, regardless of this name.
-	if _, err = staged.Navigate(changes[0].Path); err != nil {
-		return fmt.Errorf("guidance links invalid: %w", err)
-	}
-	for _, change := range changes {
-		if err = real.WriteIfUnchanged(change.Path, []byte(change.Content), expected[change.Path]); err != nil {
-			return err
-		}
-	}
-	return nil
+	})
 }

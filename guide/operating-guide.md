@@ -169,8 +169,10 @@ The registry records the last scan's sources for diagnostics. It does not config
 5. Run `tmix learning schedule enable` to install the current user's hourly job.
 
 The worker sends selected evidence and existing notes to the configured harness/provider. Inspect sensitive source logs before enabling it.
-Pi runs without tools or saved sessions. Codex runs ephemerally in a read-only sandbox with shell tools and hooks disabled.
+Session-learning and navigation requests run without model tools or saved sessions.
+Codex uses an ephemeral read-only sandbox with shell tools and hooks disabled for these requests.
 Codex retains model/provider settings but disables MCP, app, browser, and computer tools for reviews.
+Consolidation uses the restricted read access described below.
 Treat the harness executable and its credential configuration as trusted software.
 Compatibility checks alone do not establish authentication. Scheduled jobs need credentials available outside the interactive shell.
 The worker validates structured results and pending-turn citations, not just exit codes.
@@ -219,6 +221,55 @@ Incremental requests use changed notes, existing maps, and notes already linked 
 The worker still checks the complete vault against the note input limit before selecting incremental input.
 Oversized input fails explicitly; it is never silently truncated.
 These input limits are separate from the map output limits.
+
+### Consolidate substantive notes
+
+The learning job consolidates substantive notes after session learning, including invocations with no pending turns.
+Consolidation has separate progress and never advances session-review coverage.
+Changed notes enter a deduplicated queue. The worker also detects manual edits.
+Each invocation processes one batch of at most four selected notes, with one slot reserved for a rotating historical sweep.
+Selection uses at most half of `learning.max_input_bytes`.
+The report lists oversized notes in `consolidation_oversized`; smaller notes can still proceed.
+If no substantive note fits, the batch fails explicitly.
+The sweep does not imply that old notes are wrong or that every claim receives fresh verification.
+
+Run `tmix learning consolidate [NOTE...]` for an explicit pass without scanning sessions.
+Optional note paths enter the queue. A batch does not necessarily finish every queued note.
+This command can make paid model requests.
+Consolidation follows `learning.publication`, including automatic publication.
+With proposals, accept the reported `consolidation_id` using `tmix learning accept ID`.
+Run `tmix learning consolidation discard ID` to discard a pending run and retain unfinished work.
+Discard does not undo published writes.
+
+The harness searches a private snapshot of notes and follows their evidence pointers.
+It reads only parser-produced cited turns, not a searchable raw-session corpus.
+A pointer can select disjoint turns: `[Evidence](trailmix://session/pi/SESSION_ID?turns=2,7,11-13)`.
+The same format applies to Codex. Turn numbers identify completed logical turns, not JSONL lines.
+New lesson publication requires these pointers for structured session citations.
+Previously saved proposals can retain recognized prose citations.
+Publication validates session identity and turn existence. It does not establish that evidence supports a claim.
+
+Consolidation preserves provenance and qualifications. It proposes complete note bodies without deleting files or editing navigation maps.
+Duplicate merges can leave a pointer note at the original path.
+Unavailable evidence prevents supported factual correction, not a no-change review.
+Recognizable historical prose references remain usable during review. Other references appear only as note text.
+
+The private read bundle includes existing notes and cited evidence, within sixteen times `learning.max_input_bytes`.
+Oversized bundles fail without truncation. Transcripts can contain sensitive information even after parser filtering.
+Pi uses an explicit read guard with ordinary file tools, at most 24 model turns, and a bounded tool-read budget.
+Codex uses a named filesystem permission profile with no network access for shell tools and at most 48 activity items.
+Codex consolidation requires support for strict configuration and named permission profiles.
+Both harnesses retain the existing input, output, and timeout limits.
+Consolidation can make one generation request and two repair requests. Repairs share one timeout per execution.
+Attempts survive interruption. Restarted execution receives a new timeout but cannot reset its attempt count.
+
+Invalid generated proposals receive validation feedback before publication.
+Exhausted repairs retain the failed run for inspection and discard. No invalid batch publishes or advances consolidation progress.
+All offered notes and cited turns receive source baselines, including files the agent does not read.
+Source conflicts stop publication. Saved proposals resume partial writes without another model request.
+The worker finishes pending consolidation before new learning, then refreshes navigation after changed notes publish.
+Completed work records only selected notes the agent reports as finished. Related reads do not advance the sweep.
+No-change reviews need no approval. Consolidation does not automatically requeue its own writes.
 
 ### Publish learning proposals
 

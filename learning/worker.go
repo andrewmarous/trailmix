@@ -20,31 +20,37 @@ import (
 )
 
 type JobStatus struct {
-	NavigationID      string  `json:"navigation_id,omitempty"`
-	Started           string  `json:"started"`
-	Finished          string  `json:"finished,omitempty"`
-	LastSuccess       string  `json:"last_success,omitempty"`
-	Status            string  `json:"status"`
-	RunID             string  `json:"run_id,omitempty"`
-	ProposalPath      string  `json:"proposal_path,omitempty"`
-	Error             string  `json:"error,omitempty"`
-	CoverageErrors    int     `json:"coverage_errors"`
-	SessionsTargeted  int     `json:"sessions_targeted"`
-	SessionsCompleted int     `json:"sessions_completed"`
-	BatchRanges       []Range `json:"batch_ranges,omitempty"`
-	TurnsTargeted     int     `json:"turns_targeted"`
-	TurnsCompleted    int     `json:"turns_completed"`
-	BatchesCompleted  int     `json:"batches_completed"`
-	TurnsRemaining    int     `json:"turns_remaining"`
+	ConsolidationID        string   `json:"consolidation_id,omitempty"`
+	ConsolidationCompleted bool     `json:"consolidation_completed,omitempty"`
+	ConsolidationOversized []string `json:"consolidation_oversized,omitempty"`
+	NavigationID           string   `json:"navigation_id,omitempty"`
+	Started                string   `json:"started"`
+	Finished               string   `json:"finished,omitempty"`
+	LastSuccess            string   `json:"last_success,omitempty"`
+	Status                 string   `json:"status"`
+	RunID                  string   `json:"run_id,omitempty"`
+	ProposalPath           string   `json:"proposal_path,omitempty"`
+	Error                  string   `json:"error,omitempty"`
+	CoverageErrors         int      `json:"coverage_errors"`
+	SessionsTargeted       int      `json:"sessions_targeted"`
+	SessionsCompleted      int      `json:"sessions_completed"`
+	BatchRanges            []Range  `json:"batch_ranges,omitempty"`
+	TurnsTargeted          int      `json:"turns_targeted"`
+	TurnsCompleted         int      `json:"turns_completed"`
+	BatchesCompleted       int      `json:"batches_completed"`
+	TurnsRemaining         int      `json:"turns_remaining"`
 }
 type Proposal struct {
-	Kind     string            `json:"kind,omitempty"`
-	Sources  map[string]string `json:"source_sha256,omitempty"`
-	RunID    string            `json:"run_id"`
-	Vault    string            `json:"vault"`
-	Policy   string            `json:"policy"`
-	Result   Result            `json:"result"`
-	Expected map[string]string `json:"expected_sha256"`
+	EvidenceFormat string            `json:"evidence_format,omitempty"`
+	EvidenceHashes map[string]string `json:"evidence_sha256,omitempty"`
+	Completed      bool              `json:"completed,omitempty"`
+	Kind           string            `json:"kind,omitempty"`
+	Sources        map[string]string `json:"source_sha256,omitempty"`
+	RunID          string            `json:"run_id"`
+	Vault          string            `json:"vault"`
+	Policy         string            `json:"policy"`
+	Result         Result            `json:"result"`
+	Expected       map[string]string `json:"expected_sha256"`
 }
 
 func proposalPath(dir, id string) string {
@@ -235,7 +241,7 @@ func validateResult(r Result, packets []Packet) error {
 	return nil
 }
 func makeProposal(c config.Config, id string, r Result, packets []Packet, notes map[string]string) (Proposal, error) {
-	p := Proposal{RunID: id, Vault: c.Vault.Path, Policy: c.Learning.Publication, Result: r, Expected: map[string]string{}}
+	p := Proposal{RunID: id, Vault: c.Vault.Path, Policy: c.Learning.Publication, Result: r, Expected: map[string]string{}, EvidenceFormat: "uri-v1"}
 	if err := validateResult(r, packets); err != nil {
 		return p, err
 	}
@@ -374,6 +380,24 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 	if err != nil {
 		return status, err
 	}
+	consolidationDone := false
+	// Recover consolidation before navigation or new learning can consume its
+	// partially published outputs. Session proposal recovery has priority.
+	if status.Status != "recovering" {
+		s, e := loadConsolidationState(c)
+		if e != nil {
+			return status, e
+		}
+		if s.Active != nil {
+			if err = maintainConsolidation(ctx, c, &status); err != nil {
+				return status, err
+			}
+			if status.Status == "awaiting_approval" {
+				return status, nil
+			}
+			consolidationDone = true
+		}
+	}
 	// Capture workload before any model call so reports include the turns held
 	// back by navigation. Recover interrupted lesson writes before mapping them.
 	if status.Status != "recovering" {
@@ -414,6 +438,20 @@ func RunOnce(ctx context.Context, c config.Config) (status JobStatus, err error)
 			return status, err
 		}
 		if len(packets) == 0 {
+			if !consolidationDone {
+				if err = maintainConsolidation(ctx, c, &status); err != nil {
+					return status, err
+				}
+			}
+			if status.Status == "awaiting_approval" {
+				return status, nil
+			}
+			if err = maintainNavigation(ctx, c, &status, false); err != nil {
+				return status, err
+			}
+			if status.Status == "awaiting_approval" {
+				return status, nil
+			}
 			if status.CoverageErrors > 0 {
 				return status, fmt.Errorf("learning coverage incomplete: %d source/session errors: %s; inspect tmix learning sessions status", status.CoverageErrors, coverageProblem)
 			}
@@ -527,8 +565,20 @@ func ApplyProposal(c config.Config, id string) error {
 		return err
 	}
 	defer unlock()
+	if p.Kind != "consolidation" {
+		s, e := loadConsolidationState(c)
+		if e != nil {
+			return e
+		}
+		if s.Active != nil {
+			return fmt.Errorf("finish or discard consolidation %s before other publication", s.Active.ID)
+		}
+	}
 	if p.Kind == "navigation" {
 		return applyNavigation(c, p)
+	}
+	if p.Kind == "consolidation" {
+		return applyConsolidation(c, p)
 	}
 	if p.Kind != "" {
 		return fmt.Errorf("unknown proposal kind %q", p.Kind)
@@ -551,10 +601,19 @@ func ApplyProposal(c config.Config, id string) error {
 		if err = validateResult(p.Result, packets); err != nil {
 			return err
 		}
+		if p.EvidenceFormat != "" && p.EvidenceFormat != "uri-v1" {
+			return fmt.Errorf("unknown evidence format %q", p.EvidenceFormat)
+		}
+		if err = validateEvidenceReferencesMode(r, p.Result.Changes, p.EvidenceFormat == ""); err != nil {
+			return err
+		}
 		// Verify the source and compute progress before publication, but commit that
 		// progress only after every write succeeds. Persisted proposals make partial
 		// publication retryable without running the model again.
 		if _, err = r.Close(id, p.Result.Summary, false); err != nil {
+			return err
+		}
+		if err = queueConsolidation(c, p.Result.Changes); err != nil {
 			return err
 		}
 		if err = queueNavigation(c, p.Result.Changes); err != nil {
