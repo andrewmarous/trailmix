@@ -39,6 +39,23 @@ Sources, licenses, and update procedure: `.agents/skills/UPSTREAM.md`.
 - Keep shell changes compatible with their declared interpreter. Run `bash -n` on changed Bash scripts.
 - Report commands, results, and unavailable checks. Distinguish execution success from model-output quality.
 
+## Issue tracking
+
+Use Beads Rust (`br`) for engineering issues. Trailmix remains the memory store.
+For installation, fresh clones, or sync recovery, read [the setup guide](docs/issue-tracking.md).
+
+- For engineering work, inspect the relevant issue with `br show <id> --json`.
+  Use `br ready --json` to find unblocked work, not as authorization to expand scope.
+- Check existing issues before creating another. Include reproduction evidence and acceptance criteria for bugs.
+- Claim approved work with `br update <id> --claim`.
+  Claims apply to the local database. Coordinate assignments across clones.
+- Record verification and remaining work in the issue.
+  Close it with `br close <id> --reason "..."` only after its acceptance criteria pass.
+- Before staging issue changes, run `br sync --flush-only`.
+  Review `.beads/issues.jsonl` and share changes through the normal authorized Git workflow.
+- If Git or BR reports a conflict, preserve both versions and resolve it deliberately.
+  Ask before selecting a destructive force policy.
+
 ## Generated guidance
 
 Edit this contributor section directly. Edit `guide/operating-guide.md` for the operating guide, then run `make docs`.

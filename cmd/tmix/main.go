@@ -70,13 +70,17 @@ func main() { os.Exit(runMain()) }
 func runMain() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
 	input := newCLIInput(os.Stdin)
 	defer input.Close()
+
+	// Let cancellation unblock stdin reads.
 	go func() {
 		<-ctx.Done()
 		stop()        // A second signal uses the default termination behavior.
 		input.Close() // Unblock only CLI-owned input, never caller-supplied readers.
 	}()
+
 	if err := runCommand(ctx, os.Args[1:], input, os.Stdout, os.Stderr); err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr, "tmix: operation canceled:", err)
@@ -92,15 +96,20 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	in = commandInput{ctx, in}
+
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
 		_, err := fmt.Fprintf(out, "tmix %s (commit %s, built %s)\n", version, commit, date)
 		return err
 	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
+
+	// Resolve global options before dispatching commands.
 	global := flag.NewFlagSet("tmix", flag.ContinueOnError)
 	global.SetOutput(diagnostics)
 	root := global.String("vault", filepath.Join(home, ".trailmix"), "vault directory")
@@ -112,11 +121,14 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		}
 		return err
 	}
+
 	args = global.Args()
 	if len(args) == 0 || args[0] == "help" {
 		fmt.Fprint(out, usage)
 		return nil
 	}
+
+	// Updating must work even when configuration is broken.
 	command := args[0]
 	if command == "update" {
 		flags := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -133,6 +145,8 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		}
 		return update.Run(ctx, version, *check, out)
 	}
+
+	// Config management needs a path, but not a valid config.
 	*configPath, err = filepath.Abs(config.Expand(*configPath, home))
 	if err != nil {
 		return err
@@ -140,10 +154,13 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 	if command == "config" {
 		return runConfig(args[1:], *configPath, out)
 	}
+
 	cfg, err := config.Load(*configPath, home)
 	if err != nil {
 		return err
 	}
+
+	// An explicit vault flag wins over the configured default.
 	vaultOverride := false
 	global.Visit(func(f *flag.Flag) {
 		if f.Name == "vault" {
@@ -153,6 +170,8 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 	if !vaultOverride {
 		*root = cfg.Vault.Path
 	}
+
+	// These commands bypass the shared vault command parser.
 	if command == "instructions" {
 		if len(args) != 1 {
 			return fmt.Errorf("instructions takes no arguments")
@@ -160,20 +179,26 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		_, err := io.WriteString(out, guide.Text)
 		return err
 	}
+
 	if command == "learning" {
 		return runLearning(ctx, args[1:], *root, cfg, *configPath, in, out, diagnostics)
 	}
+
 	if command == "index" {
 		return runIndex(ctx, args[1:], *root, cfg.Retrieval, out, diagnostics)
 	}
+
 	switch command {
 	case "init", "search", "links", "read", "write", "append", "remote", "backup", "sync":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
+
+	// Parse options specific to the remaining commands.
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(diagnostics)
 	flags.StringVar(root, "vault", *root, "vault directory")
+
 	var overwrite, install, jsonOutput bool
 	learningStateDir := cfg.Learning.StateDir
 	var enableSync, disableSync, backgroundSync, syncStatus bool
@@ -195,6 +220,7 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		flags.IntVar(&limit, "limit", 10, "maximum results (1–100)")
 		flags.BoolVar(&jsonOutput, "json", false, "emit JSON")
 	}
+
 	parseArgs := args[1:]
 	if command == "remote" {
 		parseArgs = nil
@@ -205,11 +231,14 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		}
 		return err
 	}
+
 	positional := flags.Args()
 	if command == "remote" {
 		// Preserve git remote's -v flag instead of parsing it as a CLI flag.
 		positional = args[1:]
 	}
+
+	// Check argument counts before opening the vault.
 	if command == "remote" || command == "backup" || command == "sync" {
 		if command != "remote" && len(positional) > 1 {
 			return fmt.Errorf("backup accepts at most one remote name")
@@ -225,15 +254,19 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 	} else if len(positional) != 1 {
 		return fmt.Errorf("%s requires exactly one note path", command)
 	}
+
 	if *root == "~" {
 		*root = home
 	} else if strings.HasPrefix(*root, "~/") {
 		*root = filepath.Join(home, (*root)[2:])
 	}
+
 	v, err := vault.Open(*root)
 	if err != nil {
 		return err
 	}
+
+	// Serialize note mutations with backup and sync.
 	if command == "write" || command == "append" || command == "backup" || command == "sync" {
 		unlock, err := backup.LockContext(ctx, v.Root)
 		if err != nil {
@@ -241,6 +274,7 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		}
 		defer unlock()
 	}
+
 	switch command {
 	case "remote", "backup", "sync":
 		configDir, err := os.UserConfigDir()
@@ -250,17 +284,21 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		if cfg.Remotes == nil && *configPath != filepath.Clean(config.Path(home)) {
 			cfg.Remotes = map[string]string{}
 		}
+
 		g := backup.Git{Context: ctx, Config: filepath.Join(configDir, "trailmix", "remotes.gitconfig"), Remotes: cfg.Remotes, SaveRemotes: func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes) }, AppConfig: *configPath, Out: out, Err: diagnostics}
+		// Reload under the lock to preserve concurrent remote edits.
 		if command == "remote" {
 			unlock, err := config.LockContext(ctx, *configPath)
 			if err != nil {
 				return err
 			}
 			defer unlock()
+
 			latest, err := config.Load(*configPath, home)
 			if err != nil {
 				return err
 			}
+
 			g.Remotes = latest.Remotes
 			if g.Remotes == nil && *configPath != filepath.Clean(config.Path(home)) {
 				g.Remotes = map[string]string{}
@@ -268,10 +306,12 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 			g.SaveRemotes = func(remotes map[string]string) error { return config.SaveRemotes(*configPath, remotes, true) }
 			return g.Remote(positional)
 		}
+
 		remote := cfg.Sync.Remote
 		if len(positional) == 1 {
 			remote = positional[0]
 		}
+
 		if command == "sync" {
 			count := 0
 			for _, b := range []bool{enableSync, disableSync, backgroundSync, syncStatus} {
@@ -282,6 +322,8 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 			if count > 1 {
 				return fmt.Errorf("choose only one sync option")
 			}
+
+			// Scheduled jobs must use saved settings, not CLI overrides.
 			if enableSync || disableSync {
 				interval, err := cfg.Sync.Schedule.Duration()
 				if enableSync {
@@ -298,10 +340,12 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 				fmt.Fprintln(out, "Automatic sync enabled:", enableSync)
 				return nil
 			}
+
 			if syncStatus {
 				if _, err := os.Stat(filepath.Join(v.Root, ".tmx-sync-failing")); err == nil {
 					fmt.Fprintln(out, "Automatic sync is failing. Run tmix sync for details.")
 				}
+
 				data, err := os.ReadFile(filepath.Join(v.Root, ".tmx-last-sync"))
 				if os.IsNotExist(err) {
 					fmt.Fprintln(out, "No successful sync yet")
@@ -313,11 +357,13 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 				fmt.Fprintf(out, "Last successful sync: %s", data)
 				return nil
 			}
+
 			if backgroundSync {
 				return g.Background(v.Root, remote)
 			}
 			return g.Sync(v.Root, remote)
 		}
+
 		return g.Backup(v.Root, remote)
 	case "init":
 		if _, err := os.Stat(*configPath); os.IsNotExist(err) {
@@ -328,12 +374,16 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		if err := v.Init(); err != nil {
 			return err
 		}
+
+		// Initialize learning only after the vault is ready.
 		start, err := (learning.Store{Dir: learningStateDir}).Initialize()
 		if err != nil {
 			return fmt.Errorf("initialize learning state: %w (vault remains ready)", err)
 		}
+
 		fmt.Fprintln(out, "Vault ready:", v.Root)
 		fmt.Fprintln(out, "Learning starts at:", start)
+
 		if obsidianInstalled(home) {
 			fmt.Fprintln(out, "Obsidian detected. Open this folder as a vault.")
 			return nil
@@ -342,6 +392,7 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 			fmt.Fprintln(out, "Obsidian not detected. The CLI is ready; install Obsidian separately or use init --install-obsidian.")
 			return nil
 		}
+
 		if err := installObsidian(runtime.GOOS, in, diagnostics); err != nil {
 			return fmt.Errorf("install Obsidian: %w (vault remains ready)", err)
 		}
@@ -351,9 +402,11 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		if err != nil {
 			return err
 		}
+
 		if jsonOutput {
 			return json.NewEncoder(out).Encode(links)
 		}
+
 		for _, group := range []struct {
 			name string
 			refs []vault.Reference
@@ -374,6 +427,7 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		if err != nil {
 			return err
 		}
+
 		_, err = out.Write(data)
 		return err
 	case "write", "append":
@@ -387,6 +441,7 @@ func runCommand(ctx context.Context, args []string, in io.Reader, out, diagnosti
 		if len(data) > 16*1024*1024 {
 			return fmt.Errorf("stdin exceeds 16 MiB")
 		}
+
 		if command == "write" {
 			err = v.Write(positional[0], data, overwrite)
 		} else {
@@ -403,6 +458,7 @@ func obsidianInstalled(home string) bool {
 	if _, err := exec.LookPath("obsidian"); err == nil {
 		return true
 	}
+
 	if runtime.GOOS == "darwin" {
 		for _, p := range []string{"/Applications/Obsidian.app", filepath.Join(home, "Applications", "Obsidian.app")} {
 			if info, err := os.Stat(p); err == nil && info.IsDir() {
@@ -410,5 +466,6 @@ func obsidianInstalled(home string) bool {
 			}
 		}
 	}
+
 	return false
 }
