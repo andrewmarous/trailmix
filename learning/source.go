@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Event contains review evidence, not system prompts, reasoning, or usage records.
@@ -50,7 +52,19 @@ func readEntries(path string) ([]entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := bufio.NewReader(io.LimitReader(f, info.Size()))
+
+	// session transcript could compressed, decompress on read
+	input := io.LimitReader(f, info.Size())
+	if strings.HasSuffix(path, ".jsonl.zst") {
+		decoder, err := zstd.NewReader(input, zstd.WithDecoderConcurrency(1))
+		if err != nil {
+			return nil, err
+		}
+		defer decoder.Close()
+		input = decoder
+	}
+
+	r := bufio.NewReader(input)
 	var entries []entry
 	for line := 1; ; line++ {
 		b, e := r.ReadBytes('\n')

@@ -226,7 +226,10 @@ func (r *Registry) Scan(sources []Source) error {
 				source.Errors = append(source.Errors, "skipped symlink: "+path)
 				return nil
 			}
-			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
+
+			// sometimes Codex will compress its transcripts
+			compressedCodex := source.Harness == "codex" && strings.HasSuffix(path, ".jsonl.zst")
+			if d.IsDir() || (filepath.Ext(path) != ".jsonl" && !compressedCodex) {
 				return nil
 			}
 			t, e := parse(path, source.Harness)

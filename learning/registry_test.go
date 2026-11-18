@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestResumedSessionSnapshotAndArchive(t *testing.T) {
@@ -90,6 +93,47 @@ func TestResumedSessionSnapshotAndArchive(t *testing.T) {
 		t.Fatal("abort advanced count")
 	}
 }
+func TestCompressedCodexReplacement(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "one.jsonl")
+	lines := codexLines("one")
+	writeLines(t, path, lines...)
+	r := Registry{Version: 2, LearningStartAt: "2099-01-01T00:00:00Z"}
+	if err := r.Scan([]Source{{Harness: "codex", Root: root}}); err != nil {
+		t.Fatal(err)
+	}
+	enc, err := zstd.NewWriter(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer enc.Close()
+	data := enc.EncodeAll([]byte(strings.Join(lines, "\n")+"\n"), nil)
+	if err := os.WriteFile(path+".zst", data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := r.Scan(nil); err != nil {
+			t.Fatal(err)
+		}
+		s := r.session("codex/one")
+		if s == nil || s.Error != "" || s.Path != path+".zst" || s.BeforeCutoffTurns != 1 || s.PendingTurns != 0 || s.ReviewedTurns != 0 {
+			t.Fatalf("compressed replacement: %+v", s)
+		}
+	}
+	if err := os.Truncate(path+".zst", int64(len(data)-1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Scan(nil); err != nil {
+		t.Fatal(err)
+	}
+	if r.session("codex/one").Error == "" {
+		t.Fatal("truncated archive accepted")
+	}
+}
+
 func TestRewriteAndBranchRequireReset(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "pi.jsonl")

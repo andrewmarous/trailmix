@@ -5,6 +5,7 @@ go 1.24
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/gofrs/flock v0.12.1
+	github.com/klauspost/compress v1.18.3
 	github.com/ncruces/go-sqlite3 v0.20.3
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/yuin/goldmark v1.7.13
